@@ -49,21 +49,36 @@ def _item_winner(w_result: dict | None, c_result: dict | None) -> tuple[str, flo
     if c_result is None:
         return "no_comparison", 0.0
 
-    # Prefer unit price comparison (handles different pack sizes fairly)
-    w_price = w_result["unit_price"] if w_result["unit_price"] is not None else w_result["price"]
-    c_price = c_result["unit_price"] if c_result["unit_price"] is not None else c_result["price"]
+    w_unit = w_result["unit_price"]
+    c_unit = c_result["unit_price"]
+    both_have_unit_price = w_unit is not None and c_unit is not None
 
-    diff = abs(w_price - c_price)
+    # Prefer unit price for winner when both available; else pack price
+    if both_have_unit_price:
+        w_compare = w_unit
+        c_compare = c_unit
+    else:
+        w_compare = w_result["price"]
+        c_compare = c_result["price"]
+
+    diff = abs(w_compare - c_compare)
 
     # Tie threshold — within 2% of each other or less than 1 cent per 100ml/g
-    if diff < 0.01 or (max(w_price, c_price) > 0 and diff / max(w_price, c_price) < 0.02):
+    if diff < 0.01 or (max(w_compare, c_compare) > 0 and diff / max(w_compare, c_compare) < 0.02):
         return "tie", 0.0
 
-    if w_price < c_price:
-        # Express saving in pack price terms for the user
-        return "woolworths", round(c_result["price"] - w_result["price"], 2)
+    if w_compare < c_compare:
+        winner = "woolworths"
     else:
-        return "coles", round(w_result["price"] - c_result["price"], 2)
+        winner = "coles"
+
+    # Unit-price saving when both normalised; otherwise pack price difference
+    if both_have_unit_price:
+        saving = round(abs(w_unit - c_unit), 4)
+    else:
+        saving = round(abs(w_result["price"] - c_result["price"]), 2)
+
+    return winner, saving
 
 
 def _build_note(
@@ -142,7 +157,7 @@ def compare_basket(items: list[str]) -> dict:
 
         # Determine match type
         if search_type == "branded":
-            match_type = "branded" if (w_result and c_result) else "branded"
+            match_type = "branded"
         else:
             match_type = "generic"
 
