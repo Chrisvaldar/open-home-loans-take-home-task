@@ -1,0 +1,88 @@
+{
+    "query": "Full Cream Milk",
+    "results": [
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 9.9,
+        "product_size": "3L",
+        "url": "https://www.coles.com.au/product/3186175"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 6.9,
+        "product_size": "2L",
+        "url": "https://www.coles.com.au/product/9760091"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 3.9,
+        "product_size": "1L",
+        "url": "https://www.coles.com.au/product/9760070"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Uht Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 3.9,
+        "product_size": "1L",
+        "url": "https://www.coles.com.au/product/4873250"
+      },
+      {
+        "barcode": null,
+        "product_name": "Lactose Free Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 6.9,
+        "product_size": "2L",
+        "url": "https://www.coles.com.au/product/5458210"
+      },
+      {
+        "barcode": null,
+        "product_name": "Lactose Free Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 9.9,
+        "product_size": "3L",
+        "url": "https://www.coles.com.au/product/1104147"
+      },
+      {
+        "barcode": null,
+        "product_name": "Lactose Free Full Cream Milk",
+        "product_brand": "a2 Milk",
+        "current_price": 3.9,
+        "product_size": "1L",
+        "url": "https://www.coles.com.au/product/5593191"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "Green Pastures",
+        "current_price": 4.3,
+        "product_size": "2L",
+        "url": "https://www.coles.com.au/product/1595800"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "Coles Organic",
+        "current_price": 2.9,
+        "product_size": "1L",
+        "url": "https://www.coles.com.au/product/3227159"
+      },
+      {
+        "barcode": null,
+        "product_name": "Full Cream Milk",
+        "product_brand": "Devondale",
+        "current_price": 4,
+        "product_size": "2L",
+        "url": "https://www.coles.com.au/product/1913790"
+      }
+    ],
+    "total_results": 1856,
+    "total_pages": 186,
+    "current_page": 1
+  }
