@@ -1,17 +1,190 @@
 from services.woolworths import search_item as search_woolworths
 from services.coles import search_item as search_coles
+from services.matching import detect_search_type, pick_best_match, normalise_unit_price
+
+
+def _build_store_result(match: dict | None) -> dict | None:
+    """Convert a raw API result into the standardised store result shape."""
+    if match is None:
+        return None
+
+    price = match.get("price") or 0.0
+    size = match.get("size") or ""
+    normalised = normalise_unit_price(price, size)
+
+    return {
+        "name": match.get("name") or "",
+        "brand": match.get("brand") or "",
+        "price": price,
+        "size": size,
+        "unit_price": normalised[0] if normalised else None,
+        "unit": normalised[1] if normalised else None,
+        "on_special": match.get("on_special") or False,
+        "confidence": _confidence(match),
+    }
+
+
+def _confidence(match: dict) -> str:
+    """Derive a confidence label from the match score if present, else 'medium'."""
+    score = match.get("_score")
+    if score is None:
+        return "medium"
+    if score >= 0.7:
+        return "high"
+    if score >= 0.4:
+        return "medium"
+    return "low"
+
+
+def _item_winner(w_result: dict | None, c_result: dict | None) -> tuple[str, float]:
+    """
+    Determine the winner for a single item.
+    Returns (winner, saving) where saving is always >= 0.
+    Uses unit_price for comparison when both are available, else pack price.
+    """
+    if w_result is None and c_result is None:
+        return "no_comparison", 0.0
+    if w_result is None:
+        return "no_comparison", 0.0
+    if c_result is None:
+        return "no_comparison", 0.0
+
+    # Prefer unit price comparison (handles different pack sizes fairly)
+    w_price = w_result["unit_price"] if w_result["unit_price"] is not None else w_result["price"]
+    c_price = c_result["unit_price"] if c_result["unit_price"] is not None else c_result["price"]
+
+    diff = abs(w_price - c_price)
+
+    # Tie threshold — within 2% of each other or less than 1 cent per 100ml/g
+    if diff < 0.01 or (max(w_price, c_price) > 0 and diff / max(w_price, c_price) < 0.02):
+        return "tie", 0.0
+
+    if w_price < c_price:
+        # Express saving in pack price terms for the user
+        return "woolworths", round(c_result["price"] - w_result["price"], 2)
+    else:
+        return "coles", round(w_result["price"] - c_result["price"], 2)
+
+
+def _build_note(
+    search_type: str,
+    w_result: dict | None,
+    c_result: dict | None,
+    winner: str,
+) -> str | None:
+    """Generate a human-readable note about the comparison quality."""
+    if winner == "no_comparison":
+        if w_result is None and c_result is None:
+            return "No match found at either store"
+        if w_result is None:
+            return "Not available at Woolworths"
+        if c_result is None:
+            return "Not available at Coles"
+
+    if search_type == "generic" and w_result and c_result:
+        w_brand = (w_result.get("brand") or "").lower()
+        c_brand = (c_result.get("brand") or "").lower()
+        if w_brand and c_brand and w_brand != c_brand:
+            return "Different brands — comparing unit price where possible"
+
+    if w_result and c_result:
+        w_size = (w_result.get("size") or "").lower()
+        c_size = (c_result.get("size") or "").lower()
+        if w_size and c_size and w_size != c_size:
+            return f"Different pack sizes ({w_result['size']} vs {c_result['size']}) — comparing per unit price"
+
+    return None
+
 
 def compare_basket(items: list[str]) -> dict:
-    """
-    Compare a shopping list across Woolworths and Coles.
+    """Compare a shopping list across Woolworths and Coles."""
+    if not items:
+        return {
+            "winner": "tie",
+            "total_woolworths": 0.0,
+            "total_coles": 0.0,
+            "savings": 0.0,
+            "annualised_savings": 0.0,
+            "breakdown": [],
+        }
 
-    TODO: Wire up woolworths/coles search, matching, and price comparison logic.
-    """
+    breakdown = []
+    total_woolworths = 0.0
+    total_coles = 0.0
+
+    for item in items:
+        search_type = detect_search_type(item)
+
+        # Fetch top 3 results from each store
+        w_raw = search_woolworths(item)
+        c_raw = search_coles(item)
+
+        # Pick best match from each store's results
+        w_match = pick_best_match(item, w_raw, search_type)
+        c_match = pick_best_match(item, c_raw, search_type)
+
+        # No match at either store
+        if w_match is None and c_match is None:
+            breakdown.append({
+                "item": item,
+                "match_type": "no_match",
+                "woolworths": None,
+                "coles": None,
+                "winner": "no_comparison",
+                "saving": 0.0,
+                "note": "No match found at either store",
+            })
+            continue
+
+        # Build standardised result shapes
+        w_result = _build_store_result(w_match)
+        c_result = _build_store_result(c_match)
+
+        # Determine match type
+        if search_type == "branded":
+            match_type = "branded" if (w_result and c_result) else "branded"
+        else:
+            match_type = "generic"
+
+        # Determine winner and saving for this item
+        winner, saving = _item_winner(w_result, c_result)
+
+        # Build note
+        note = _build_note(search_type, w_result, c_result, winner)
+
+        # Accumulate totals — only count items where both stores have a result
+        if w_result and winner != "no_comparison":
+            total_woolworths += w_result["price"]
+        if c_result and winner != "no_comparison":
+            total_coles += c_result["price"]
+
+        breakdown.append({
+            "item": item,
+            "match_type": match_type,
+            "woolworths": w_result,
+            "coles": c_result,
+            "winner": winner,
+            "saving": saving,
+            "note": note,
+        })
+
+    # Overall winner based on totals
+    diff = total_woolworths - total_coles
+    if abs(diff) <= 0.50:
+        overall_winner = "tie"
+        overall_savings = 0.0
+    elif diff < 0:
+        overall_winner = "woolworths"
+        overall_savings = round(abs(diff), 2)
+    else:
+        overall_winner = "coles"
+        overall_savings = round(abs(diff), 2)
+
     return {
-        "winner": "tie",
-        "total_woolworths": 0.0,
-        "total_coles": 0.0,
-        "savings": 0.0,
-        "annualised_savings": 0.0,
-        "breakdown": [],
+        "winner": overall_winner,
+        "total_woolworths": round(total_woolworths, 2),
+        "total_coles": round(total_coles, 2),
+        "savings": overall_savings,
+        "annualised_savings": round(overall_savings * 52, 2),
+        "breakdown": breakdown,
     }
