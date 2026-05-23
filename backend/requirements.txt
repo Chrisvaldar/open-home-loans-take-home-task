@@ -3,4 +3,4 @@ uvicorn
 requests
 python-dotenv
 pytest
-anthropic
+google-genai

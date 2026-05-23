@@ -16,7 +16,9 @@ Built as part of the Open Home Loans take-home assessment (Brief 3A).
 backend/
   main.py                 # FastAPI app + CORS
   routers/compare.py      # POST /api/compare
-  routers/receipt.py      # POST /api/receipt (stub)
+  routers/receipt.py      # POST /api/receipt
+  tests/fixtures/         # local test receipt images (gitignored)
+  scripts/                # receipt test helpers
   services/               # API clients, matching, comparison logic
   tests/                  # pytest unit tests
 frontend/
@@ -53,6 +55,8 @@ uvicorn main:app --reload
 
 API runs at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 
+**Receipt testing:** put a sample image at `backend/tests/fixtures/test_receipt.jpg` (gitignored), then run `python scripts/test_receipt.py` from `backend/`. See [backend/docs/receipt_testing.md](backend/docs/receipt_testing.md) — Swagger often fails on large base64 payloads.
+
 ### Frontend
 
 ```bash
@@ -79,7 +83,7 @@ Create `backend/.env` from `backend/.env.example`:
 | Variable | Description |
 |----------|-------------|
 | `RAPIDAPI_KEY` | RapidAPI key for Woolworths & Coles product search |
-| `ANTHROPIC_API_KEY` | Anthropic API key for receipt image extraction (experimental; vision model choice TBD) |
+| `GEMINI_API_KEY` | Google Gemini API key for receipt image extraction |
 
 Never commit `.env` — it is listed in `.gitignore`.
 
