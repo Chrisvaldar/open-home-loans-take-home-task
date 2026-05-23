@@ -9,8 +9,13 @@ RECEIPT_MODEL = "gemini-2.5-flash"
 
 PROMPT = (
     "Extract grocery item names from this receipt image. "
+    "Include the product size or weight if it appears on the receipt "
+    "(e.g. '700g', '2L', '100g', '8pk') as part of the item name string. "
     "Return ONLY a JSON array of strings, brand names included, "
-    "no prices, no quantities. No markdown, no backticks, just the array."
+    "no prices, no quantities as separate fields. "
+    "No markdown, no backticks, just the array. "
+    "Example output: [\"Helgas Traditional White Wraps 509g\", "
+    "\"The Good Farmer Free Range Eggs 700g\"]"
 )
 
 
