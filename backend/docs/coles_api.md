@@ -40,4 +40,4 @@ curl --request GET \
 	--header 'x-rapidapi-host: coles-product-price-api.p.rapidapi.com' \
 	--header 'x-rapidapi-key: 490148218fmshf954344cb967d57p11f30djsnf7a704d3d671'
 
-Refer to @coles_sample_response.json for sample output with Full Cream Milk as input
+Refer to @coles_sample_response.json for sample output of Product Search with Full Cream Milk as input
