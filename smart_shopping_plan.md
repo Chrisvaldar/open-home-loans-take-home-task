@@ -44,20 +44,31 @@ A web app where a user:
 - Full Coles price coverage (Woolworths API is more accessible — Coles is stretch)
 - Receipt scanning (too much scope for one week)
 
-### Data strategy
-**Try first (Evening 1):** Woolworths internal API via the `woolworths-api` PyPI wrapper or reverse-engineered endpoints from DevTools. One evening budget — if it's working, use it. If it's flaky, move on.
+### Data Strategy — fully live, both stores
+Both Woolworths and Coles pricing come from RapidAPI (data-holdings-group). Both APIs have identical interfaces — search by product name, get back name, brand, price, size, and URL. Free tier covers everything you need for a demo.
+Store your single RapidAPI key in .env as RAPIDAPI_KEY. Never expose it to the frontend — all calls go through FastAPI.
+# Woolworths
+GET https://woolworths-products-api.p.rapidapi.com/search
+Params: query=full cream milk, pageSize=3
 
-**Fallback (no shame):** Seed a realistic dataset of ~30 common grocery items with realistic weekly specials that rotate. Be upfront in your walkthrough: *"I explored live data via Woolworths' API and got X working, but for demo stability I used a seeded dataset. In production I'd connect a live feed."* This is a mature, honest engineering answer.
+# Coles
+GET https://coles-product-price-api.p.rapidapi.com/search
+Params: query=full cream milk, pageSize=3
+For each item on the user's list, hit both endpoints, take the top result from each, compare prices. Return the structured comparison to the frontend.
+Important: take pageSize=3 not 1, then pick the result whose name most closely matches the search term. Top result isn't always the most relevant — a simple string similarity check (Python's difflib.SequenceMatcher is built-in, no install needed) handles this cleanly and is worth mentioning in your walkthrough as a product quality decision.
+On_special field: The Woolworths API returns this. Coles may not. If it's available, surface it in the UI — "🔴 On special this week" next to an item is a nice touch that reinforces the weekly savings angle.
+Caching: cache results in a simple dict in FastAPI memory for the session. No need for Redis — just don't hammer the API on every keystroke if you add live search.
 
 ---
 
 ## Tech Stack
 
 Pick what you know. Suggested:
-- **Frontend:** Next.js + Tailwind (or plain React if faster for you)
-- **Backend:** Next.js API routes, or a lightweight FastAPI if you prefer Python for the data layer
-- **Data:** Woolworths API wrapper (Python) or a JSON seed file
-- **Deployment:** Vercel (free, one command deploy — essential for the submission link)
+Frontend: React + Vite + Tailwind
+Backend: FastAPI (Python)
+Communication: REST — React fetches /api/compare, FastAPI handles logic
+Deployment: Frontend on Vercel, backend on Railway or Render (both free tier)
+Dev setup: Vite proxy config pointing /api to localhost:8000, FastAPI CORS middleware allowing localhost:5173
 
 ---
 
