@@ -105,7 +105,10 @@ def _similarity_score(query: str, target: str) -> float:
     target_word_set = _query_words(target_lower)
 
     if query_word_set and query_word_set <= target_word_set:
-        return SUBSET_MATCH_SCORE
+        coverage = len(query_word_set) / len(target_word_set)
+        if coverage >= 0.5:
+            return SUBSET_MATCH_SCORE
+        # coverage too low -> fall through to SequenceMatcher
 
     return SequenceMatcher(None, query_lower, target_lower).ratio()
 
