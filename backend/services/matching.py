@@ -21,7 +21,8 @@ BRAND_LIST = [
     "up&go",
 ]
 
-SIMILARITY_THRESHOLD = 0.3
+SIMILARITY_THRESHOLD = 0.15
+SUBSET_MATCH_SCORE = 0.8
 
 
 def detect_search_type(query: str) -> str:
@@ -89,16 +90,33 @@ def normalise_unit_price(price: float, size: str) -> tuple[float, str] | None:
 
     return None
     
+def _query_words(query: str) -> set[str]:
+    return set(re.findall(r"\b\w+\b", query.lower()))
+
+
+def _similarity_score(query: str, target: str) -> float:
+    """Score query against a single text field (name or brand)."""
+    if not target:
+        return 0.0
+
+    query_lower = query.lower()
+    target_lower = target.lower()
+    query_word_set = _query_words(query_lower)
+    target_word_set = _query_words(target_lower)
+
+    if query_word_set and query_word_set <= target_word_set:
+        return SUBSET_MATCH_SCORE
+
+    return SequenceMatcher(None, query_lower, target_lower).ratio()
+
+
 def pick_best_match(query: str, results: list[dict], search_type: str) -> dict | None:
 
     def score(item):
-        """Score similarity between item text and user query."""
-        text = ""
-        if "name" in item and item["name"]:
-            text += item["name"]
-        if "brand" in item and item["brand"]:
-            text += " " + item["brand"]
-        return SequenceMatcher(None, query.lower(), text.lower()).ratio()
+        """Score name first, then brand; take the better of the two."""
+        name_score = _similarity_score(query, item.get("name", ""))
+        brand_score = _similarity_score(query, item.get("brand", ""))
+        return max(name_score, brand_score)
 
     if search_type == "branded":
         brand = _brand_in_query(query)
@@ -114,15 +132,14 @@ def pick_best_match(query: str, results: list[dict], search_type: str) -> dict |
                 filtered.append(item)
         if not filtered:
             return None
-        # Score candidates
         best_item = max(filtered, key=score)
         return best_item
-    else:  # generic
-        if not results:
-            return None
-        # Score all results
-        scored = [(score(item), item) for item in results]
-        best_score, best_item = max(scored, key=lambda x: x[0])
-        if best_score >= SIMILARITY_THRESHOLD:
-            return best_item
+
+    if not results:
         return None
+
+    scored = [(score(item), item) for item in results]
+    best_score, best_item = max(scored, key=lambda x: x[0])
+    if best_score >= SIMILARITY_THRESHOLD:
+        return best_item
+    return None
