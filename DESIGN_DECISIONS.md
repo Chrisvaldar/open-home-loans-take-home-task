@@ -93,7 +93,9 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 **Produce exception (2026-05-27):** Fresh produce (fruit, vegetable, meat) may match when core ingredient aligns even if word order differs or sold by each/kg (e.g. `brown onions` → `Onion Brown each $0.63`). Prevents Woolworths loose produce being rejected while gravy/wine candidates are in the pool.
 
-**Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/services/receipt.py`](backend/services/receipt.py) (Gemini search-friendly extraction).
+**Produce-specific rules (2026-05-27):** `is_produce_query()` detects produce keywords (onion, cabbage, beef, etc.). When true, the Groq prompt adds stricter rules: reject processed/packaged candidates (gravy, mix, tin, sauce, wine, soup, pet, dog); require same variety (green cabbage not wombok/savoy/red; brown onion not spring onion/shallot); return `-1` if no clear fresh match.
+
+**Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/tests/test_groq_reranker.py`](backend/tests/test_groq_reranker.py), [`backend/services/receipt.py`](backend/services/receipt.py) (Gemini search-friendly extraction).
 
 ---
 

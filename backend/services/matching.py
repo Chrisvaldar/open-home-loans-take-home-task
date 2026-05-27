@@ -56,6 +56,29 @@ RECEIPT_SIZE = re.compile(
 )
 RECEIPT_PACK_COUNT = re.compile(r"\b\d+\s*pack\b", re.IGNORECASE)
 
+EXCLUDED_COMPARE_ITEM_PATTERNS = (
+    re.compile(r"\breusable\b", re.IGNORECASE),
+    re.compile(r"\bshopping bag\b", re.IGNORECASE),
+    re.compile(r"\bcarrier bag\b", re.IGNORECASE),
+    re.compile(r"\bbag for good\b", re.IGNORECASE),
+    re.compile(r"\bbetter bag\b", re.IGNORECASE),
+    re.compile(r"\beco bag\b", re.IGNORECASE),
+    re.compile(r"\bgreen bag\b", re.IGNORECASE),
+    re.compile(r"\bshop bag\b", re.IGNORECASE),
+)
+
+
+def is_excluded_compare_item(item: str) -> bool:
+    """True for receipt lines that should not be price-compared (e.g. reusable bags)."""
+    text = item.strip()
+    if not text:
+        return True
+    return any(pattern.search(text) for pattern in EXCLUDED_COMPARE_ITEM_PATTERNS)
+
+
+def filter_comparable_items(items: list[str]) -> list[str]:
+    return [item for item in items if not is_excluded_compare_item(item)]
+
 
 def normalize_receipt_search_query(item: str) -> str:
     """Turn a raw receipt line into a cleaner store search query."""

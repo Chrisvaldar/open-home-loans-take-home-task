@@ -2,11 +2,17 @@ import base64
 import json
 import os
 import re
+import time
 
 from google import genai
 from google.genai import types
+from google.genai.errors import ServerError
+
+from services.matching import filter_comparable_items
 
 RECEIPT_MODEL = "gemini-2.5-flash"
+MAX_GEMINI_RETRIES = 3
+RETRY_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 
 PROMPT = """Extract grocery items from this receipt. Return a JSON array of search-friendly product names. Follow these rules:
 
@@ -14,7 +20,7 @@ Remove store names, weights from item names (e.g. WOOLWORTHS, COLES prefix)
 For produce/fresh items, convert receipt abbreviations to natural search terms: ONION BROWN 1KG → brown onions, CABBAGE GRN HALF → green cabbage half, TOMATOES PERKG → gourmet tomatoes, MELON ROCKMELON → rockmelon
 For branded items, keep brand name and size: MCCAINS FROZEN PEAS 500G → McCain frozen peas 500g
 Remove quantity/weight suffixes that are per-kg prices (PERKG, NET @)
-Include all food and grocery lines; skip non-product lines like subtotals and payment details
+Include all food and grocery lines; skip non-product lines like subtotals, payment details, and reusable or shopping bags
 Return only the JSON array, no markdown, no backticks"""
 
 
@@ -36,27 +42,52 @@ def _normalize_mime_type(mime_type: str) -> str:
     return value or "image/jpeg"
 
 
-def _parse_items_json(text: str) -> list[str]:
-    """Parse Gemini output into a list of item strings."""
+def _normalize_json_text(text: str) -> str:
+    """Strip markdown fences and normalize common Gemini JSON quirks."""
     value = text.strip()
     if not value:
-        return []
+        return value
 
     if value.startswith("```"):
         value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.IGNORECASE)
         value = re.sub(r"\s*```$", "", value).strip()
 
-    try:
-        items = json.loads(value)
+    value = (
+        value.replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+    )
+    value = re.sub(r",(\s*])", r"\1", value)
+    return value
+
+
+def _parse_items_json(text: str) -> list[str]:
+    """Parse Gemini output into a list of item strings."""
+    value = _normalize_json_text(text)
+    if not value:
+        return []
+
+    def load_array(raw: str) -> list[str] | None:
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
         if isinstance(items, list):
             return [str(item).strip() for item in items if str(item).strip()]
-    except json.JSONDecodeError:
-        array_match = re.search(r"\[[\s\S]*\]", value)
-        if array_match:
-            items = json.loads(array_match.group())
-            if isinstance(items, list):
-                return [str(item).strip() for item in items if str(item).strip()]
+        return None
 
+    parsed = load_array(value)
+    if parsed is not None:
+        return parsed
+
+    array_match = re.search(r"\[[\s\S]*\]", value)
+    if array_match:
+        parsed = load_array(array_match.group())
+        if parsed is not None:
+            return parsed
+
+    print(f"[receipt] JSON parse failed for response={text!r}")
     return []
 
 
@@ -68,27 +99,38 @@ def extract_items_from_receipt(
     if not api_key or not image_base64:
         return []
 
-    try:
-        image_data = base64.b64decode(_normalize_base64(image_base64))
+    image_data = base64.b64decode(_normalize_base64(image_base64))
+    response = None
 
-        with genai.Client(api_key=api_key) as client:
-            response = client.models.generate_content(
-                model=RECEIPT_MODEL,
-                contents=[
-                    PROMPT,
-                    types.Part.from_bytes(
-                        data=image_data,
-                        mime_type=_normalize_mime_type(mime_type),
-                    ),
-                ],
-            )
+    with genai.Client(api_key=api_key) as client:
+        for attempt in range(MAX_GEMINI_RETRIES):
+            try:
+                response = client.models.generate_content(
+                    model=RECEIPT_MODEL,
+                    contents=[
+                        PROMPT,
+                        types.Part.from_bytes(
+                            data=image_data,
+                            mime_type=_normalize_mime_type(mime_type),
+                        ),
+                    ],
+                )
+                break
+            except ServerError as exc:
+                if exc.code == 503 and attempt < MAX_GEMINI_RETRIES - 1:
+                    delay = RETRY_BACKOFF_SECONDS[attempt]
+                    print(
+                        f"[receipt] Gemini 503, retry {attempt + 1}/"
+                        f"{MAX_GEMINI_RETRIES} in {delay}s"
+                    )
+                    time.sleep(delay)
+                    continue
+                print(f"[receipt] extraction failed: {exc!r}")
+                raise
 
-        text = (response.text or "").strip()
-        print(f"[receipt] Gemini raw response={text!r}")
-        items = _parse_items_json(text)
-        print(f"[receipt] parsed {len(items)} item(s): {items}")
-        return items
-    except Exception as exc:
-        print(f"[receipt] extraction failed: {exc!r}")
-
-    return []
+    text = (response.text or "").strip()
+    print(f"[receipt] Gemini raw response={text!r}")
+    items = _parse_items_json(text)
+    items = filter_comparable_items(items)
+    print(f"[receipt] parsed {len(items)} item(s): {items}")
+    return items

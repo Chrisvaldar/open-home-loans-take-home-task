@@ -5,6 +5,66 @@ from groq import Groq
 
 RERANK_MODEL = "llama-3.1-8b-instant"
 
+PRODUCE_KEYWORDS = (
+    "onion",
+    "cabbage",
+    "tomato",
+    "rockmelon",
+    "apple",
+    "banana",
+    "carrot",
+    "broccoli",
+    "chicken",
+    "beef",
+    "pork",
+    "lamb",
+    "mince",
+    "melon",
+    "potato",
+    "lettuce",
+    "capsicum",
+    "zucchini",
+    "mushroom",
+    "pear",
+    "orange",
+    "lemon",
+    "lime",
+    "grape",
+    "strawberry",
+    "blueberry",
+    "mango",
+    "avocado",
+    "spinach",
+    "celery",
+    "pumpkin",
+    "sweet potato",
+    "corn",
+    "peas",
+    "beans",
+    "asparagus",
+    "cauliflower",
+    "kale",
+    "herbs",
+    "garlic",
+    "ginger",
+    "steak",
+    "fillet",
+    "sausage",
+    "bacon",
+    "ham",
+    "turkey",
+    "duck",
+    "salmon",
+    "prawn",
+    "fish",
+)
+
+
+def is_produce_query(query: str) -> bool:
+    """Return True when the query looks like fresh fruit, vegetable, or meat."""
+    query_lower = query.lower()
+    return any(keyword in query_lower for keyword in PRODUCE_KEYWORDS)
+
 
 def _format_candidate(index: int, item: dict) -> str:
     return (
@@ -13,31 +73,27 @@ def _format_candidate(index: int, item: dict) -> str:
     )
 
 
-def rerank_with_groq(query: str, candidates: list[dict]) -> dict | None:
-    """Pick the best API candidate for a receipt line, or None if no good match."""
-    print(f"[rerank_with_groq] called query={query!r} candidates={len(candidates)}")
-    for index, item in enumerate(candidates):
-        print(f"[rerank_with_groq]   {_format_candidate(index, item)}")
-
-    if not candidates:
-        print("[rerank_with_groq] skipping — no candidates")
-        return None
-
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        print("[rerank_with_groq] skipping — GROQ_API_KEY not set")
-        return None
-
-    candidate_lines = "\n".join(
-        _format_candidate(index, item) for index, item in enumerate(candidates)
+def _produce_rules_block() -> str:
+    return (
+        "FRESH PRODUCE RULES (this query is fresh produce):\n"
+        "- Reject candidates that are clearly processed or packaged: anything containing "
+        "gravy, mix, tin, sauce, wine, frozen, powder, broth, soup, pet, dog.\n"
+        "- Require the same variety: if query says 'green cabbage' reject wombok, savoy, "
+        "red cabbage; if query says 'brown onion' reject spring onion, shallot.\n"
+        "- Word order may differ and loose/each/kg is fine (e.g. brown onions → Onion Brown each).\n"
+        "- If no candidate clearly matches the fresh produce type AND variety, return -1.\n\n"
     )
-    max_index = len(candidates) - 1
 
-    prompt = (
+
+def _build_prompt(query: str, candidate_lines: str, max_index: int) -> str:
+    produce_rules = _produce_rules_block() if is_produce_query(query) else ""
+
+    return (
         "You are a strict grocery product matcher for Australian supermarket receipts.\n"
         "Your job is to REJECT bad matches. Only accept a candidate when it is clearly "
         "the same product as the receipt line.\n"
         "When in doubt, return -1.\n\n"
+        f"{produce_rules}"
         "Return -1 unless ALL of these are true for one candidate:\n"
         "1. Same product TYPE (peas not onion rings, beef mince not pies or dog food, "
         "dishwashing tablets not denture tablets or medicine, brioche bagels not blueberry bagels, "
@@ -54,16 +110,35 @@ def rerank_with_groq(query: str, candidates: list[dict]) -> dict | None:
         "- Store name on receipt (COLES/WOOLWORTHS) does NOT mean match any Coles/Woolworths product\n"
         "- Only vague or partial overlap\n"
         "- You would not confidently buy this candidate based on the receipt line\n\n"
-        "Produce exception: If the query is a fresh produce item (fruit, vegetable, meat) "
-        "and a candidate matches the core ingredient name even if word order differs or "
-        "it is sold by each or kg, prefer that over returning -1. "
-        "Example: query brown onions → accept Onion Brown each $0.63\n\n"
         f"Return ONLY a single integer: index 0-{max_index} for ONE clear match, "
         "or -1 if no candidate is a clear match.\n"
         "No explanation, just the number.\n"
         f"Receipt item: {query}\n"
         f"Candidates:\n{candidate_lines}"
     )
+
+
+def rerank_with_groq(query: str, candidates: list[dict]) -> dict | None:
+    """Pick the best API candidate for a receipt line, or None if no good match."""
+    print(f"[rerank_with_groq] called query={query!r} candidates={len(candidates)}")
+    print(f"[rerank_with_groq] is_produce_query={is_produce_query(query)}")
+    for index, item in enumerate(candidates):
+        print(f"[rerank_with_groq]   {_format_candidate(index, item)}")
+
+    if not candidates:
+        print("[rerank_with_groq] skipping — no candidates")
+        return None
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("[rerank_with_groq] skipping — GROQ_API_KEY not set")
+        return None
+
+    candidate_lines = "\n".join(
+        _format_candidate(index, item) for index, item in enumerate(candidates)
+    )
+    max_index = len(candidates) - 1
+    prompt = _build_prompt(query, candidate_lines, max_index)
 
     try:
         client = Groq(api_key=api_key)

@@ -3,6 +3,8 @@ import pytest
 from services.matching import (
     detect_search_type,
     expand_staple_query,
+    filter_comparable_items,
+    is_excluded_compare_item,
     is_staple_query,
     normalize_receipt_search_query,
     normalise_unit_price,
@@ -212,16 +214,16 @@ def test_normalize_receipt_search_query_fixes_ocr_noise():
     )
 
 
-def test_normalize_receipt_search_query_strips_store_prefix_and_size():
-    assert normalize_receipt_search_query("COLES BEEF 4 STAR LE 500GRAM") == (
-        "beef 4 star lean"
-    )
+def test_is_excluded_compare_item_reusable_bags():
+    assert is_excluded_compare_item("reusable shopping bag")
+    assert is_excluded_compare_item("COLES REUSABLE BAG")
+    assert is_excluded_compare_item("Woolworths bag for good")
+    assert is_excluded_compare_item("carrier bag")
+    assert not is_excluded_compare_item("brown onions 1kg")
+    assert not is_excluded_compare_item("bagels")
 
 
-def test_normalize_receipt_search_query_fixes_ocr_noise():
-    assert normalize_receipt_search_query("MCCAINS FROZEN:PEAS 500GRAM") == (
-        "mccains frozen peas"
-    )
-    assert normalize_receipt_search_query("SOMAT EXCELLENCE CAP 74PACK") == (
-        "somat excellence tablets"
-    )
+def test_filter_comparable_items():
+    assert filter_comparable_items(
+        ["milk", "reusable bag", "bread", "eco bag"]
+    ) == ["milk", "bread"]

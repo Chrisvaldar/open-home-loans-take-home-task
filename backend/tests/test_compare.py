@@ -195,3 +195,17 @@ def test_receipt_source_uses_groq_reranker(
     assert mock_rerank.call_count == 2
     item = result["breakdown"][0]
     assert item["woolworths"]["name"] == "Milk 2L"
+
+
+@patch("services.compare.search_woolworths")
+@patch("services.compare.search_coles")
+def test_compare_basket_skips_reusable_bags(mock_coles, mock_woolworths):
+    mock_woolworths.side_effect = make_search_side_effect(MOCK_WOOLWORTHS_CHEAP_MILK)
+    mock_coles.side_effect = make_search_side_effect(MOCK_COLES_EXPENSIVE_MILK)
+
+    result = compare_basket(["reusable shopping bag", "milk"])
+
+    assert len(result["breakdown"]) == 1
+    assert result["breakdown"][0]["item"] == "milk"
+    assert mock_woolworths.call_count == 1
+    assert mock_coles.call_count == 1

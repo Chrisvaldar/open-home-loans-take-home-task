@@ -4,6 +4,7 @@ from services.coles import search_item as search_coles
 from services.matching import (
     detect_search_type,
     expand_staple_query,
+    filter_comparable_items,
     is_staple_query,
     normalize_receipt_search_query,
     pick_best_match,
@@ -154,6 +155,7 @@ RECEIPT_CANDIDATE_LIMIT = 10
 
 def compare_basket(items: list[str], source: str = "manual") -> dict:
     """Compare a shopping list across Woolworths and Coles."""
+    items = filter_comparable_items(items)
     print(f"[compare_basket] source={source!r} items={len(items)}")
     if not items:
         return {
