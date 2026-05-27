@@ -1,4 +1,5 @@
 import MatchNote from './MatchNote.jsx';
+import StoreBadge from './StoreBadge.jsx';
 import {
   formatCurrency,
   formatUnitPrice,
@@ -36,44 +37,6 @@ function heroHeadline(winner) {
     default:
       return "It's a tie this week";
   }
-}
-
-/**
- * @param {BasketWinner} winner
- */
-function StoreBadge({ winner, size = 'md' }) {
-  const sizeClasses =
-    size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-10 w-10 text-sm';
-
-  if (winner === 'woolworths') {
-    return (
-      <span
-        className={`inline-flex ${sizeClasses} items-center justify-center rounded-full bg-success font-semibold text-white`}
-        aria-label="Woolworths"
-      >
-        W
-      </span>
-    );
-  }
-
-  if (winner === 'coles') {
-    return (
-      <span
-        className={`inline-flex ${sizeClasses} items-center justify-center rounded-full bg-destructive font-semibold text-white`}
-        aria-label="Coles"
-      >
-        C
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`inline-flex ${sizeClasses} items-center justify-center rounded-full border border-border-default text-xs font-medium text-text-secondary`}
-    >
-      —
-    </span>
-  );
 }
 
 /**

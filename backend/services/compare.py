@@ -1,6 +1,13 @@
 from services.woolworths import search_item as search_woolworths
 from services.coles import search_item as search_coles
-from services.matching import detect_search_type, pick_best_match, normalise_unit_price
+from services.matching import (
+    detect_search_type,
+    expand_staple_query,
+    is_staple_query,
+    pick_best_match,
+    normalise_unit_price,
+    store_staple_search_term,
+)
 
 
 def _build_store_result(match: dict | None) -> dict | None:
@@ -129,14 +136,20 @@ def compare_basket(items: list[str]) -> dict:
 
     for item in items:
         search_type = detect_search_type(item)
+        search_term = expand_staple_query(item)
 
-        # Fetch top 3 results from each store
-        w_raw = search_woolworths(item)
-        c_raw = search_coles(item)
+        if search_type == "generic" and is_staple_query(item):
+            w_raw = search_woolworths(
+                store_staple_search_term(search_term, "woolworths")
+            )
+            c_raw = search_coles(store_staple_search_term(search_term, "coles"))
+        else:
+            w_raw = search_woolworths(search_term)
+            c_raw = search_coles(search_term)
 
         # Pick best match from each store's results
-        w_match = pick_best_match(item, w_raw, search_type)
-        c_match = pick_best_match(item, c_raw, search_type)
+        w_match = pick_best_match(item, w_raw, search_type, search_term=search_term)
+        c_match = pick_best_match(item, c_raw, search_type, search_term=search_term)
 
         # No match at either store
         if w_match is None and c_match is None:

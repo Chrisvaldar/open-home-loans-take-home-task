@@ -22,7 +22,51 @@ BRAND_LIST = [
 ]
 
 SIMILARITY_THRESHOLD = 0.15
+GENERIC_SIMILARITY_THRESHOLD = 0.25
 SUBSET_MATCH_SCORE = 0.8
+
+STAPLE_INTENT_MAP = {
+    "milk": "full cream milk 2L",
+    "bread": "white sandwich bread loaf",
+    "eggs": "free range eggs 700g",
+    "butter": "butter 500g",
+    "chicken": "chicken breast",
+    "mince": "beef mince 500g",
+    "rice": "white rice 1kg",
+    "pasta": "pasta 500g",
+    "cheese": "tasty cheese 500g",
+    "yoghurt": "greek yoghurt",
+}
+
+HOMEBRAND_KEYWORDS = (
+    "woolworths",
+    "coles",
+    "homebrand",
+    "select",
+    "essentials",
+    "smart buy",
+    "macro",
+    "simply",
+)
+
+
+def expand_staple_query(query: str) -> str:
+    """Expand common single-word staples to a more specific search term."""
+    key = query.strip().lower()
+    return STAPLE_INTENT_MAP.get(key, query)
+
+
+def is_staple_query(query: str) -> bool:
+    return query.strip().lower() in STAPLE_INTENT_MAP
+
+
+def store_staple_search_term(base_term: str, store: str) -> str:
+    """Prefix staple searches with the store name to surface homebrand products."""
+    if store == "woolworths":
+        return f"woolworths {base_term}"
+    if store == "coles":
+        return f"coles {base_term}"
+    return base_term
 
 
 def detect_search_type(query: str) -> str:
@@ -113,7 +157,26 @@ def _similarity_score(query: str, target: str) -> float:
     return SequenceMatcher(None, query_lower, target_lower).ratio()
 
 
-def pick_best_match(query: str, results: list[dict], search_type: str) -> dict | None:
+def _query_word_in_name(query: str, name: str) -> bool:
+    """Return True if at least one query word appears in the product name."""
+    return bool(_query_words(query) & _query_words(name))
+
+
+def _is_single_word_query(query: str) -> bool:
+    return len(_query_words(query)) == 1
+
+
+def _is_homebrand(item: dict) -> bool:
+    text = f"{item.get('name', '')} {item.get('brand', '')}".lower()
+    return any(keyword in text for keyword in HOMEBRAND_KEYWORDS)
+
+
+def pick_best_match(
+    query: str,
+    results: list[dict],
+    search_type: str,
+    search_term: str | None = None,
+) -> dict | None:
 
     def score(item):
         """Score name first, then brand; take the better of the two."""
@@ -141,8 +204,28 @@ def pick_best_match(query: str, results: list[dict], search_type: str) -> dict |
     if not results:
         return None
 
-    scored = [(score(item), item) for item in results]
-    best_score, best_item = max(scored, key=lambda x: x[0])
-    if best_score >= SIMILARITY_THRESHOLD:
-        return best_item
-    return None
+    match_query = (search_term or query).strip()
+    candidates = results
+    if _is_single_word_query(match_query):
+        candidates = [
+            item
+            for item in results
+            if _query_word_in_name(match_query, item.get("name", ""))
+        ]
+        if not candidates:
+            return None
+
+    def generic_score(item):
+        return _similarity_score(match_query, item.get("name", ""))
+
+    passing = [
+        item
+        for item in candidates
+        if generic_score(item) >= GENERIC_SIMILARITY_THRESHOLD
+    ]
+    if not passing:
+        return None
+
+    homebrand_matches = [item for item in passing if _is_homebrand(item)]
+    pool = homebrand_matches if homebrand_matches else passing
+    return min(pool, key=lambda item: item.get("price", float("inf")))

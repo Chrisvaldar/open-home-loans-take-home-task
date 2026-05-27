@@ -4,7 +4,7 @@ from services.compare import compare_basket
 
 # Controlled mock data — we decide exactly what each store returns
 MOCK_WOOLWORTHS_CHEAP_MILK = {
-    "name": "Woolworths Full Cream Milk 2L",
+    "name": "Milk 2L",
     "brand": "woolworths",
     "price": 2.50,
     "size": "2L",
@@ -12,7 +12,7 @@ MOCK_WOOLWORTHS_CHEAP_MILK = {
 }
 
 MOCK_COLES_EXPENSIVE_MILK = {
-    "name": "Coles Full Cream Milk 2L",
+    "name": "Milk 2L",
     "brand": "coles",
     "price": 3.20,
     "size": "2L",
@@ -20,7 +20,7 @@ MOCK_COLES_EXPENSIVE_MILK = {
 }
 
 MOCK_COLES_CHEAP_BREAD = {
-    "name": "Coles White Bread 700g",
+    "name": "White Bread",
     "brand": "coles",
     "price": 2.00,
     "size": "700g",
@@ -28,7 +28,7 @@ MOCK_COLES_CHEAP_BREAD = {
 }
 
 MOCK_WOOLWORTHS_EXPENSIVE_BREAD = {
-    "name": "Woolworths White Bread 700g",
+    "name": "White Bread",
     "brand": "woolworths",
     "price": 2.80,
     "size": "700g",
@@ -111,8 +111,20 @@ def test_empty_list_returns_valid_empty_breakdown():
 @patch("services.compare.search_coles")
 def test_brand_mismatch_generic_note(mock_coles, mock_woolworths):
     # Both stores return different brands for a generic search
-    woolies_result = {**MOCK_WOOLWORTHS_CHEAP_MILK, "brand": "woolworths"}
-    coles_result = {**MOCK_COLES_EXPENSIVE_MILK, "brand": "coles"}
+    woolies_result = {
+        "name": "Full Cream Milk 2L",
+        "brand": "woolworths",
+        "price": 2.50,
+        "size": "2L",
+        "on_special": False,
+    }
+    coles_result = {
+        "name": "Full Cream Milk 2L",
+        "brand": "coles",
+        "price": 3.20,
+        "size": "2L",
+        "on_special": False,
+    }
     mock_woolworths.side_effect = make_search_side_effect(woolies_result)
     mock_coles.side_effect = make_search_side_effect(coles_result)
 
