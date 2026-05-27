@@ -48,7 +48,32 @@ export function formatWinnerLabel(winner) {
 
 /**
  * @param {File} file
- * @returns {Promise<string>}
+ * @returns {string}
+ */
+export function getFileMimeType(file) {
+  if (file.type) {
+    return file.type;
+  }
+
+  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+  switch (extension) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.heic':
+      return 'image/heic';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return '';
+  }
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<{ base64: string, mimeType: string }>}
  */
 export function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -61,8 +86,11 @@ export function fileToBase64(file) {
         return;
       }
 
-      const base64 = result.replace(/^data:image\/jpeg;base64,/, '');
-      resolve(base64);
+      const base64 = result.replace(/^data:[^;]+;base64,/, '');
+      resolve({
+        base64,
+        mimeType: getFileMimeType(file),
+      });
     };
 
     reader.onerror = () => {

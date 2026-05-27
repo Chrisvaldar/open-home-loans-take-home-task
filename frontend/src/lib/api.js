@@ -42,13 +42,14 @@ export async function compareBasket(items) {
 
 /**
  * @param {string} base64Image
+ * @param {string} mimeType
  * @returns {Promise<import('./types.js').ReceiptResponse>}
  */
-export async function scanReceipt(base64Image) {
+export async function scanReceipt(base64Image, mimeType) {
   const response = await fetch('/api/receipt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64Image }),
+    body: JSON.stringify({ image: base64Image, mime_type: mimeType }),
   });
 
   if (!response.ok) {

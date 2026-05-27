@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+PROJECT_STATE.md
 
 # Local receipt test images and generated payloads (keep README + .gitkeep)
 backend/tests/fixtures/*

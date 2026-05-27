@@ -46,7 +46,7 @@ def main() -> int:
             return 1
         response = requests.post(
             "http://localhost:8000/api/receipt",
-            json={"image": encoded},
+            json={"image": encoded, "mime_type": "image/jpeg"},
             timeout=120,
         )
         response.raise_for_status()
@@ -54,7 +54,7 @@ def main() -> int:
     else:
         from services.receipt import extract_items_from_receipt
 
-        items = extract_items_from_receipt(encoded)
+        items = extract_items_from_receipt(encoded, "image/jpeg")
 
     print(json.dumps(items, indent=2))
     print(f"\n{len(items)} item(s) extracted")

@@ -27,7 +27,19 @@ def _normalize_base64(image_base64: str) -> str:
     return value
 
 
-def extract_items_from_receipt(image_base64: str) -> list[str]:
+def _normalize_mime_type(mime_type: str) -> str:
+    """Normalize browser MIME aliases to values Gemini accepts."""
+    value = mime_type.strip().lower()
+    if value == "image/jpg":
+        return "image/jpeg"
+    if value == "image/heif":
+        return "image/heic"
+    return value or "image/jpeg"
+
+
+def extract_items_from_receipt(
+    image_base64: str, mime_type: str = "image/jpeg"
+) -> list[str]:
     """Extract grocery item names from a receipt image via Gemini vision."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or not image_base64:
@@ -43,7 +55,7 @@ def extract_items_from_receipt(image_base64: str) -> list[str]:
                     PROMPT,
                     types.Part.from_bytes(
                         data=image_data,
-                        mime_type="image/jpeg",
+                        mime_type=_normalize_mime_type(mime_type),
                     ),
                 ],
             )
