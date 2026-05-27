@@ -77,6 +77,38 @@ function StoreProductCell({ product }) {
 /**
  * @param {BreakdownItem} row
  */
+function WinnerCell({ row }) {
+  const showSaving =
+    (row.winner === 'woolworths' || row.winner === 'coles') && row.saving > 0;
+
+  if (row.winner === 'woolworths' || row.winner === 'coles') {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <StoreBadge winner={row.winner} size="sm" />
+          <span className="text-sm text-text-primary">
+            {formatWinnerLabel(row.winner)}
+          </span>
+        </div>
+        {showSaving ? (
+          <p className="mt-1 font-numeric text-xs text-text-secondary">
+            saves {formatCurrency(row.saving)}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <span className="text-sm text-text-secondary">
+      {formatWinnerLabel(row.winner)}
+    </span>
+  );
+}
+
+/**
+ * @param {BreakdownItem} row
+ */
 function rowConfidence(row) {
   return row.woolworths?.confidence ?? row.coles?.confidence ?? 'medium';
 }
@@ -96,14 +128,8 @@ function BreakdownCard({ row }) {
             {row.item}
           </h3>
         </div>
-        <div className="flex items-center gap-2">
-          {row.winner === 'woolworths' || row.winner === 'coles' ? (
-            <StoreBadge winner={row.winner} size="sm" />
-          ) : (
-            <span className="text-xs text-text-secondary">
-              {formatWinnerLabel(row.winner)}
-            </span>
-          )}
+        <div>
+          <WinnerCell row={row} />
         </div>
       </div>
 
@@ -226,18 +252,7 @@ export default function Results({ results, onCompareAgain }) {
                     <StoreProductCell product={row.coles} />
                   </td>
                   <td className="px-4 py-4 align-top">
-                    {row.winner === 'woolworths' || row.winner === 'coles' ? (
-                      <div className="flex items-center gap-2">
-                        <StoreBadge winner={row.winner} size="sm" />
-                        <span className="text-sm text-text-primary">
-                          {formatWinnerLabel(row.winner)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-text-secondary">
-                        {formatWinnerLabel(row.winner)}
-                      </span>
-                    )}
+                    <WinnerCell row={row} />
                   </td>
                   <td className="px-4 py-4 align-top">
                     <MatchNote

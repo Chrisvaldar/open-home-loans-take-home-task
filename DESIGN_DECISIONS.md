@@ -1,6 +1,16 @@
 # Design Decisions
 
-A running log of product and engineering choices for **Smart Shopping Destination**. Add new entries here whenever a meaningful decision is made or revisited.
+A running log of product and engineering choices for **Frugl**. Add new entries here whenever a meaningful decision is made or revisited.
+
+---
+
+## Product identity
+
+### App renamed to Frugl
+
+**Decision:** Product name is **Frugl** (was "Smart Shopping Destination" in scaffold).
+
+**Why:** Shorter consumer-facing brand for the price-comparison app. Updated in `frontend/index.html` title, `App.jsx` header and shield icon alt text, and `backend/main.py` FastAPI title.
 
 ---
 
@@ -70,6 +80,40 @@ A running log of product and engineering choices for **Smart Shopping Destinatio
 **Caveat:** The fallback is an inference, not a fact. A large cross-store price gap might mean a weekly special, but it could also be a permanent shelf-price difference, a data lag, or mismatched promo timing. We label the badge **Special** (not "On special") to keep the wording neutral. If the APIs later expose reliable was/original pricing, prefer that and treat inference as a last resort only.
 
 **Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
+
+---
+
+### Groq reranker for receipt items
+
+**Decision:** When `compare_basket(..., source="receipt")`, pick store matches via `rerank_with_groq()` (`llama-3.1-8b-instant`, `GROQ_API_KEY`) instead of string matching. Receipt lines are normalized with `normalize_receipt_search_query()` before API search; up to 10 candidates per store.
+
+**Why:** Receipt OCR lines are noisy; string matcher picked cheapest partial overlap (gravy for Somat, beer for beef). Groq reads receipt line plus numbered candidates and returns an index or `-1`.
+
+**Strict matching (2026-05-27):** Default to `-1` unless product type, brand, size, and name all align. Rejects pet food, wrong variants, denture tablets, etc.
+
+**Produce exception (2026-05-27):** Fresh produce (fruit, vegetable, meat) may match when core ingredient aligns even if word order differs or sold by each/kg (e.g. `brown onions` → `Onion Brown each $0.63`). Prevents Woolworths loose produce being rejected while gravy/wine candidates are in the pool.
+
+**Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/services/receipt.py`](backend/services/receipt.py) (Gemini search-friendly extraction).
+
+---
+
+### Receipt JSON parsing (markdown fences)
+
+**Decision:** Parse Gemini output with `_parse_items_json()`, which strips optional markdown code fences before `json.loads`. Log raw response and parsed item count to stdout.
+
+**Why:** Gemini often wraps the array in ` ```json ` despite the prompt. Bare `json.loads()` failed silently and returned `[]`, showing "No items found on receipt" even when extraction worked.
+
+**Reference:** [`backend/services/receipt.py`](backend/services/receipt.py), [`backend/tests/test_receipt_parse.py`](backend/tests/test_receipt_parse.py).
+
+---
+
+### Per-row winner savings in Results
+
+**Decision:** In the breakdown table (and mobile cards), show `saves $X.XX` in muted text below the winner logo/name, using `BreakdownItem.saving`. Hidden for `tie` and `no_comparison`.
+
+**Why:** Makes per-item value visible without reading unit-price notes. Uses existing backend saving (unit-price diff when both normalised, else pack price diff).
+
+**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) `WinnerCell`.
 
 ---
 

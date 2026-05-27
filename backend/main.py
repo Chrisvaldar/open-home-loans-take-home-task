@@ -6,7 +6,7 @@ from routers import compare, receipt
 
 load_dotenv()
 
-app = FastAPI(title="Smart Shopping Destination")
+app = FastAPI(title="Frugl")
 
 app.add_middleware(
     CORSMiddleware,

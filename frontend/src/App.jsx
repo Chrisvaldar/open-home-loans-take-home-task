@@ -66,13 +66,10 @@ export default function App() {
         <header className="mb-8 flex items-center gap-3">
           <img
             src={homeShieldIcon}
-            alt=""
-            aria-hidden="true"
+            alt="Frugl"
             className="h-5 w-[18px]"
           />
-          <h1 className="text-[40px] leading-none text-text-primary">
-            Smart Shopping Destination
-          </h1>
+          <h1 className="text-[40px] leading-none text-text-primary">Frugl</h1>
         </header>
 
         {view === 'list' && (
