@@ -1,6 +1,8 @@
-# Smart Shopping Destination
+# Frugl
 
 A grocery price comparison web app that helps Australian households decide whether to shop at **Coles** or **Woolworths** this week. Enter your regular shopping list, compare current prices and specials, and see how much you could save.
+
+**Live app:** [https://open-home-loans-take-home-task.vercel.app/](https://open-home-loans-take-home-task.vercel.app/)
 
 Built as part of the Open Home Loans take-home assessment (Brief 3A).
 

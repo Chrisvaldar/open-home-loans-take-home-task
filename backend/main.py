@@ -6,11 +6,18 @@ from routers import compare, receipt
 
 load_dotenv()
 
+PRODUCTION_FRONTEND_ORIGIN = "https://open-home-loans-take-home-task.vercel.app"
+
 app = FastAPI(title="Frugl")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        PRODUCTION_FRONTEND_ORIGIN,
+    ],
+    allow_origin_regex=r"https://open-home-loans-take-home-task.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

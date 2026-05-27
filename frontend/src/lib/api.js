@@ -1,3 +1,5 @@
+const BASE_URL = import.meta.env.VITE_API_URL || '';
+
 /**
  * @param {Response} response
  * @returns {Promise<string>}
@@ -24,7 +26,7 @@ async function getErrorMessage(response, fallback) {
  * @returns {Promise<import('./types.js').CompareResponse>}
  */
 export async function compareBasket(items, source = 'manual') {
-  const response = await fetch('/api/compare', {
+  const response = await fetch(`${BASE_URL}/api/compare`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items, source }),
@@ -47,7 +49,7 @@ export async function compareBasket(items, source = 'manual') {
  * @returns {Promise<import('./types.js').ReceiptResponse>}
  */
 export async function scanReceipt(base64Image, mimeType) {
-  const response = await fetch('/api/receipt', {
+  const response = await fetch(`${BASE_URL}/api/receipt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: base64Image, mime_type: mimeType }),
