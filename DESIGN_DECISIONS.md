@@ -109,11 +109,11 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 ### Per-row winner savings in Results
 
-**Decision:** In the breakdown table (and mobile cards), show `saves $X.XX` in muted text below the winner logo/name, using `BreakdownItem.saving`. Hidden for `tie` and `no_comparison`.
+**Decision:** In the breakdown table (and mobile cards), show `Saves $X.XX` at the start of the NOTE column (via `MatchNote`), before the match note and confidence. Hidden when `saving` is 0. Winner column shows store logo only (no duplicate store name text).
 
-**Why:** Makes per-item value visible without reading unit-price notes. Uses existing backend saving (unit-price diff when both normalised, else pack price diff).
+**Why:** Makes per-item value visible without cluttering the winner cell. Logo alone is enough to identify the store.
 
-**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) `WinnerCell`.
+**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) `WinnerCell`, [`frontend/src/components/MatchNote.jsx`](frontend/src/components/MatchNote.jsx).
 
 ---
 

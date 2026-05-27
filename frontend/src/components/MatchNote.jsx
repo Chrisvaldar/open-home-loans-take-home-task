@@ -1,13 +1,20 @@
+import { formatCurrency } from '../lib/format.js';
+
 /**
  * @param {string | null | undefined} note
  * @param {import('../lib/types.js').Confidence | string | null | undefined} confidence
+ * @param {number} [saving]
  */
-export default function MatchNote({ note, confidence }) {
-  if (!note && !confidence) {
+export default function MatchNote({ note, confidence, saving = 0 }) {
+  if (!note && !confidence && !(saving > 0)) {
     return null;
   }
 
   const parts = [];
+
+  if (saving > 0) {
+    parts.push(`Saves ${formatCurrency(saving)}`);
+  }
 
   if (note) {
     parts.push(note);

@@ -78,25 +78,8 @@ function StoreProductCell({ product }) {
  * @param {BreakdownItem} row
  */
 function WinnerCell({ row }) {
-  const showSaving =
-    (row.winner === 'woolworths' || row.winner === 'coles') && row.saving > 0;
-
   if (row.winner === 'woolworths' || row.winner === 'coles') {
-    return (
-      <div>
-        <div className="flex items-center gap-2">
-          <StoreBadge winner={row.winner} size="sm" />
-          <span className="text-sm text-text-primary">
-            {formatWinnerLabel(row.winner)}
-          </span>
-        </div>
-        {showSaving ? (
-          <p className="mt-1 font-numeric text-xs text-text-secondary">
-            saves {formatCurrency(row.saving)}
-          </p>
-        ) : null}
-      </div>
-    );
+    return <StoreBadge winner={row.winner} size="sm" />;
   }
 
   return (
@@ -148,7 +131,11 @@ function BreakdownCard({ row }) {
         </div>
       </div>
 
-      <MatchNote note={row.note} confidence={rowConfidence(row)} />
+      <MatchNote
+        note={row.note}
+        confidence={rowConfidence(row)}
+        saving={row.saving}
+      />
     </article>
   );
 }
@@ -258,6 +245,7 @@ export default function Results({ results, onCompareAgain }) {
                     <MatchNote
                       note={row.note}
                       confidence={rowConfidence(row)}
+                      saving={row.saving}
                     />
                   </td>
                 </tr>
