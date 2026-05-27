@@ -58,6 +58,21 @@ A running log of product and engineering choices for **Smart Shopping Destinatio
 
 ---
 
+### Special badge: API detection plus cross-store inference
+
+**Decision:** Surface a yellow **Special** badge in results when `on_special` is true. Detection uses two layers:
+
+1. **Primary (store search):** In `woolworths.py` and `coles.py`, set `on_special` when the API item includes `was_price` or `original_price` and `current_price` is lower than that value. If neither field exists, leave `on_special` false at this stage.
+2. **Fallback (compare):** In `compare.py`, `_infer_cross_store_special()` marks the cheaper store as on special when both stores matched the same brand and pack size and one price is at least 15% lower than the other.
+
+**Why:** Live RapidAPI search responses for Woolworths and Coles typically only return `current_price`, name, brand, size, and URL. They do not include `was_price`, `original_price`, or `on_special`, so the primary check alone never fires. Without the fallback, the badge would never appear despite obvious gaps like Kirk's lemonade at $1.80 vs $3.00.
+
+**Caveat:** The fallback is an inference, not a fact. A large cross-store price gap might mean a weekly special, but it could also be a permanent shelf-price difference, a data lag, or mismatched promo timing. We label the badge **Special** (not "On special") to keep the wording neutral. If the APIs later expose reliable was/original pricing, prefer that and treat inference as a last resort only.
+
+**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
+
+---
+
 ## Product matching
 
 ### Two paths: branded vs generic

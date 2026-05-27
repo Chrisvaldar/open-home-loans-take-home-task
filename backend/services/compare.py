@@ -10,6 +10,35 @@ from services.matching import (
 )
 
 
+def _infer_cross_store_special(
+    w_result: dict | None, c_result: dict | None
+) -> None:
+    """Infer on_special when the API omits was/original price but one store is much cheaper."""
+    if not w_result or not c_result:
+        return
+
+    w_brand = (w_result.get("brand") or "").strip().lower()
+    c_brand = (c_result.get("brand") or "").strip().lower()
+    w_size = (w_result.get("size") or "").strip().lower()
+    c_size = (c_result.get("size") or "").strip().lower()
+    if not w_brand or w_brand != c_brand or w_size != c_size:
+        return
+
+    w_price = w_result["price"]
+    c_price = c_result["price"]
+    if w_price <= 0 or c_price <= 0:
+        return
+
+    cheaper_ratio = min(w_price, c_price) / max(w_price, c_price)
+    if cheaper_ratio > 0.85:
+        return
+
+    if w_price < c_price and not w_result.get("on_special"):
+        w_result["on_special"] = True
+    elif c_price < w_price and not c_result.get("on_special"):
+        c_result["on_special"] = True
+
+
 def _build_store_result(match: dict | None) -> dict | None:
     """Convert a raw API result into the standardised store result shape."""
     if match is None:
@@ -167,6 +196,7 @@ def compare_basket(items: list[str]) -> dict:
         # Build standardised result shapes
         w_result = _build_store_result(w_match)
         c_result = _build_store_result(c_match)
+        _infer_cross_store_special(w_result, c_result)
 
         # Determine match type
         if search_type == "branded":

@@ -62,13 +62,13 @@ function StoreProductCell({ product }) {
           </span>
         ) : null}
       </p>
+      {product.on_special ? (
+        <span className="inline-block rounded bg-[#facc15] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-black">
+          Special
+        </span>
+      ) : null}
       {unitPrice && (
         <p className="font-numeric text-xs text-text-secondary">{unitPrice}</p>
-      )}
-      {product.on_special && (
-        <span className="inline-block rounded-full border border-accent px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-          On special
-        </span>
       )}
     </div>
   );
