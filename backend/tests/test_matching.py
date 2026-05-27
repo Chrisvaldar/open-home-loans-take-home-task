@@ -214,16 +214,26 @@ def test_normalize_receipt_search_query_fixes_ocr_noise():
     )
 
 
-def test_is_excluded_compare_item_reusable_bags():
+def test_is_excluded_compare_item_bag_charges_only():
     assert is_excluded_compare_item("reusable shopping bag")
     assert is_excluded_compare_item("COLES REUSABLE BAG")
-    assert is_excluded_compare_item("Woolworths bag for good")
-    assert is_excluded_compare_item("carrier bag")
+    assert is_excluded_compare_item("plastic bag")
+    assert is_excluded_compare_item("carry bag")
+    assert not is_excluded_compare_item("Elmer's School Glue 225ml")
+    assert not is_excluded_compare_item("Ant Rid Ant Baits")
     assert not is_excluded_compare_item("brown onions 1kg")
     assert not is_excluded_compare_item("bagels")
+    assert not is_excluded_compare_item("Woolworths bag for good")
+    assert not is_excluded_compare_item("carrier bag")
 
 
 def test_filter_comparable_items():
     assert filter_comparable_items(
-        ["milk", "reusable bag", "bread", "eco bag"]
-    ) == ["milk", "bread"]
+        [
+            "milk",
+            "reusable bag",
+            "bread",
+            "Elmer's School Glue 225ml",
+            "Ant Rid Ant Baits",
+        ]
+    ) == ["milk", "bread", "Elmer's School Glue 225ml", "Ant Rid Ant Baits"]

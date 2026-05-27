@@ -20,7 +20,7 @@ Remove store names, weights from item names (e.g. WOOLWORTHS, COLES prefix)
 For produce/fresh items, convert receipt abbreviations to natural search terms: ONION BROWN 1KG → brown onions, CABBAGE GRN HALF → green cabbage half, TOMATOES PERKG → gourmet tomatoes, MELON ROCKMELON → rockmelon
 For branded items, keep brand name and size: MCCAINS FROZEN PEAS 500G → McCain frozen peas 500g
 Remove quantity/weight suffixes that are per-kg prices (PERKG, NET @)
-Include all food and grocery lines; skip non-product lines like subtotals, payment details, and reusable or shopping bags
+Include all product lines (food, cleaning, pest control, stationery, etc.); skip non-product lines like subtotals, payment details, and store bag charges (reusable bag, shopping bag, carry bag, plastic bag)
 Return only the JSON array, no markdown, no backticks"""
 
 

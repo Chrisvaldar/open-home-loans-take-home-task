@@ -44,6 +44,10 @@ export default function ListBuilder({
     setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const clearList = () => {
+    setItems([]);
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     addItem();
@@ -145,14 +149,25 @@ export default function ListBuilder({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={onCompare}
-            disabled={items.length === 0}
-            className="w-full rounded-md bg-accent px-6 py-3 text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-          >
-            Compare
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={onCompare}
+              disabled={items.length === 0}
+              className="w-full rounded-md bg-accent px-6 py-3 text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            >
+              Compare
+            </button>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={clearList}
+                className="w-full rounded-md border border-destructive bg-transparent px-6 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 sm:w-auto"
+              >
+                Clear list
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <ReceiptUpload
