@@ -1,6 +1,52 @@
 @import "tailwindcss";
 
+@theme {
+  --color-surface-primary: #0d0d0d;
+  --color-surface-secondary: #222426;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a6a9ad;
+  --color-accent: #f2a233;
+  --color-border-default: #3d4147;
+  --color-destructive: #e34c5a;
+  --color-success: #519e3e;
+  --color-brand-shield: #dd9128;
+  --font-sans: "Neue Haas Grotesk Display Pro", sans-serif;
+  --font-mono: "DM Mono", monospace;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: "Neue Haas Grotesk Display Pro", sans-serif;
+  background-color: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+label,
+button,
+input,
+textarea,
+select {
+  font-family: "Neue Haas Grotesk Display Pro", sans-serif;
+}
+
+.font-numeric {
+  font-family: "DM Mono", monospace;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
 }
