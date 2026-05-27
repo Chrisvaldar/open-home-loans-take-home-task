@@ -187,9 +187,9 @@ Branded query logic was not changed.
 
 ### Store logos in results UI
 
-**Decision:** Show Woolworths and Coles logos in the winner column and hero via [`StoreBadge.jsx`](frontend/src/components/StoreBadge.jsx), loading SVG files from [`frontend/src/assets/brands/`](frontend/src/assets/brands/).
+**Decision:** Show Woolworths and Coles logos in the winner column and hero via [`StoreBadge.jsx`](frontend/src/components/StoreBadge.jsx), loading official SVG assets from [`frontend/src/assets/brands/`](frontend/src/assets/brands/) (`woolworths.svg`, `coles.svg`).
 
-**Why:** Clearer than letter badges. Placeholder SVGs ship with the repo; replace `woolworths.svg` and `coles.svg` with official assets when available (same filenames, no code change).
+**Why:** Clearer than letter badges. Woolworths uses the green apple icon; Coles uses the red wordmark.
 
 ---
 

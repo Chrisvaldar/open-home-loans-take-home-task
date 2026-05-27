@@ -5,14 +5,12 @@ import colesLogo from '../assets/brands/coles.svg';
  * @param {{ winner: import('../lib/types.js').BasketWinner | import('../lib/types.js').ItemWinner, size?: 'sm' | 'md' }} props
  */
 export default function StoreBadge({ winner, size = 'md' }) {
-  const sizeClasses = size === 'sm' ? 'h-6 w-6' : 'h-10 w-10';
-
   if (winner === 'woolworths') {
     return (
       <img
         src={woolworthsLogo}
         alt="Woolworths"
-        className={`${sizeClasses} shrink-0 rounded-full`}
+        className={`${size === 'sm' ? 'h-6 w-6' : 'h-10 w-10'} shrink-0 object-contain`}
       />
     );
   }
@@ -22,10 +20,12 @@ export default function StoreBadge({ winner, size = 'md' }) {
       <img
         src={colesLogo}
         alt="Coles"
-        className={`${sizeClasses} shrink-0 rounded-full`}
+        className={`${size === 'sm' ? 'h-4' : 'h-6'} shrink-0 object-contain`}
       />
     );
   }
+
+  const sizeClasses = size === 'sm' ? 'h-6 w-6' : 'h-10 w-10';
 
   return (
     <span
