@@ -1,9 +1,11 @@
+from services.groq_reranker import rerank_with_groq
 from services.woolworths import search_item as search_woolworths
 from services.coles import search_item as search_coles
 from services.matching import (
     detect_search_type,
     expand_staple_query,
     is_staple_query,
+    normalize_receipt_search_query,
     pick_best_match,
     normalise_unit_price,
     store_staple_search_term,
@@ -147,8 +149,12 @@ def _build_note(
     return None
 
 
-def compare_basket(items: list[str]) -> dict:
+RECEIPT_CANDIDATE_LIMIT = 10
+
+
+def compare_basket(items: list[str], source: str = "manual") -> dict:
     """Compare a shopping list across Woolworths and Coles."""
+    print(f"[compare_basket] source={source!r} items={len(items)}")
     if not items:
         return {
             "winner": "tie",
@@ -165,20 +171,40 @@ def compare_basket(items: list[str]) -> dict:
 
     for item in items:
         search_type = detect_search_type(item)
-        search_term = expand_staple_query(item)
 
-        if search_type == "generic" and is_staple_query(item):
+        if source == "receipt":
+            search_term = normalize_receipt_search_query(item)
+            print(
+                f"[compare_basket] receipt item={item!r} "
+                f"normalized_search={search_term!r}"
+            )
+            w_raw = search_woolworths(search_term, page_size=RECEIPT_CANDIDATE_LIMIT)
+            c_raw = search_coles(search_term, page_size=RECEIPT_CANDIDATE_LIMIT)
+        elif search_type == "generic" and is_staple_query(item):
+            search_term = expand_staple_query(item)
             w_raw = search_woolworths(
                 store_staple_search_term(search_term, "woolworths")
             )
             c_raw = search_coles(store_staple_search_term(search_term, "coles"))
         else:
+            search_term = expand_staple_query(item)
             w_raw = search_woolworths(search_term)
             c_raw = search_coles(search_term)
 
         # Pick best match from each store's results
-        w_match = pick_best_match(item, w_raw, search_type, search_term=search_term)
-        c_match = pick_best_match(item, c_raw, search_type, search_term=search_term)
+        if source == "receipt":
+            print(
+                f"[compare_basket] receipt rerank for item={item!r} "
+                f"w_candidates={len(w_raw)} c_candidates={len(c_raw)}"
+            )
+            w_match = rerank_with_groq(item, w_raw) if w_raw else None
+            c_match = rerank_with_groq(item, c_raw) if c_raw else None
+            w_name = w_match.get("name") if w_match else None
+            c_name = c_match.get("name") if c_match else None
+            print(f"[compare_basket] receipt picks w={w_name!r} c={c_name!r}")
+        else:
+            w_match = pick_best_match(item, w_raw, search_type, search_term=search_term)
+            c_match = pick_best_match(item, c_raw, search_type, search_term=search_term)
 
         # No match at either store
         if w_match is None and c_match is None:

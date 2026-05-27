@@ -34,14 +34,21 @@ export default function App() {
     }
   };
 
-  const handleReceiptSuccess = (scannedItems) => {
-    setItems(scannedItems);
+  const handleReceiptCompareStart = () => {
     setError(null);
-    setView('list');
+    setView('loading');
+  };
+
+  const handleReceiptCompareSuccess = (data) => {
+    setItems(data.breakdown.map((row) => row.item));
+    setResults(data);
+    setError(null);
+    setView('results');
   };
 
   const handleReceiptError = (message) => {
     setError(message);
+    setView((current) => (current === 'loading' ? 'error' : 'list'));
   };
 
   const handleCompareAgain = () => {
@@ -73,7 +80,8 @@ export default function App() {
             items={items}
             setItems={setItems}
             onCompare={handleCompare}
-            onReceiptSuccess={handleReceiptSuccess}
+            onReceiptCompareStart={handleReceiptCompareStart}
+            onReceiptCompareSuccess={handleReceiptCompareSuccess}
             onReceiptError={handleReceiptError}
           />
         )}

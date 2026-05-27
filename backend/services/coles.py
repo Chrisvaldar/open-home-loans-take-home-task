@@ -20,8 +20,8 @@ def _on_special(item: dict, current_price: float) -> bool:
         return False
 
 
-def search_item(query: str) -> list[dict]:
-    """Search Coles catalog; return up to 3 normalized product dicts."""
+def search_item(query: str, page_size: int = 3) -> list[dict]:
+    """Search Coles catalog; return up to page_size normalized product dicts."""
     api_key = os.getenv("RAPIDAPI_KEY")
     if not api_key:
         return []
@@ -29,7 +29,7 @@ def search_item(query: str) -> list[dict]:
     try:
         response = requests.get(
             COLES_SEARCH_URL,
-            params={"query": query, "page_size": 3},
+            params={"query": query, "page_size": page_size},
             headers={
                 "x-rapidapi-host": RAPIDAPI_HOST,
                 "x-rapidapi-key": api_key,
@@ -44,7 +44,7 @@ def search_item(query: str) -> list[dict]:
         return []
 
     results = []
-    for item in data.get("results", [])[:3]:
+    for item in data.get("results", [])[:page_size]:
         current_price = float(item.get("current_price", 0))
         results.append(
             {

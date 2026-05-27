@@ -55,7 +55,7 @@ MOCK_A2_COLES = {
 # Helper — build a side_effect function for search_item mocks
 def make_search_side_effect(*results):
     """Returns a function that returns results[0] as a list, ignoring the query."""
-    def side_effect(query):
+    def side_effect(query, page_size=3):
         return list(results)
     return side_effect
 
@@ -175,3 +175,23 @@ def test_low_confidence_match_returns_no_match(mock_coles, mock_woolworths):
     result = compare_basket(["xyznonexistentproduct123"])
     item = result["breakdown"][0]
     assert item["match_type"] == "no_match"
+
+
+@patch("services.compare.rerank_with_groq")
+@patch("services.compare.search_woolworths")
+@patch("services.compare.search_coles")
+def test_receipt_source_uses_groq_reranker(
+    mock_coles, mock_woolworths, mock_rerank
+):
+    mock_woolworths.side_effect = make_search_side_effect(
+        MOCK_WOOLWORTHS_CHEAP_MILK,
+        {**MOCK_WOOLWORTHS_CHEAP_MILK, "name": "Wrong Product"},
+    )
+    mock_coles.side_effect = make_search_side_effect(MOCK_COLES_EXPENSIVE_MILK)
+    mock_rerank.side_effect = lambda query, candidates: candidates[0]
+
+    result = compare_basket(["SOMAT EXCELLENCE CAP 74PACK"], source="receipt")
+
+    assert mock_rerank.call_count == 2
+    item = result["breakdown"][0]
+    assert item["woolworths"]["name"] == "Milk 2L"

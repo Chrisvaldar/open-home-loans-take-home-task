@@ -6,7 +6,8 @@ import ReceiptUpload from './ReceiptUpload.jsx';
  *   items: string[],
  *   setItems: React.Dispatch<React.SetStateAction<string[]>>,
  *   onCompare: () => void,
- *   onReceiptSuccess: (items: string[]) => void,
+ *   onReceiptCompareStart?: () => void,
+ *   onReceiptCompareSuccess: (results: import('../lib/types.js').CompareResponse) => void,
  *   onReceiptError?: (message: string) => void,
  * }} props
  */
@@ -14,7 +15,8 @@ export default function ListBuilder({
   items,
   setItems,
   onCompare,
-  onReceiptSuccess,
+  onReceiptCompareStart,
+  onReceiptCompareSuccess,
   onReceiptError,
 }) {
   const [inputValue, setInputValue] = useState('');
@@ -47,9 +49,8 @@ export default function ListBuilder({
     addItem();
   };
 
-  const handleReceiptSuccess = (scannedItems) => {
-    onReceiptSuccess(scannedItems);
-    setActiveTab('manual');
+  const handleReceiptCompareSuccess = (results) => {
+    onReceiptCompareSuccess(results);
   };
 
   return (
@@ -155,7 +156,8 @@ export default function ListBuilder({
         </div>
       ) : (
         <ReceiptUpload
-          onSuccess={handleReceiptSuccess}
+          onCompareStart={onReceiptCompareStart}
+          onCompareSuccess={handleReceiptCompareSuccess}
           onError={onReceiptError}
         />
       )}

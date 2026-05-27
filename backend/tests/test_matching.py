@@ -4,6 +4,7 @@ from services.matching import (
     detect_search_type,
     expand_staple_query,
     is_staple_query,
+    normalize_receipt_search_query,
     normalise_unit_price,
     pick_best_match,
     store_staple_search_term,
@@ -194,3 +195,33 @@ def test_generic_picks_cheapest_when_no_homebrand():
     )
     assert match is not None
     assert match["price"] == 3.50
+
+
+def test_normalize_receipt_search_query_strips_store_prefix_and_size():
+    assert normalize_receipt_search_query("COLES BEEF 4 STAR LE 500GRAM") == (
+        "beef 4 star lean"
+    )
+
+
+def test_normalize_receipt_search_query_fixes_ocr_noise():
+    assert normalize_receipt_search_query("MCCAINS FROZEN:PEAS 500GRAM") == (
+        "mccains frozen peas"
+    )
+    assert normalize_receipt_search_query("SOMAT EXCELLENCE CAP 74PACK") == (
+        "somat excellence tablets"
+    )
+
+
+def test_normalize_receipt_search_query_strips_store_prefix_and_size():
+    assert normalize_receipt_search_query("COLES BEEF 4 STAR LE 500GRAM") == (
+        "beef 4 star lean"
+    )
+
+
+def test_normalize_receipt_search_query_fixes_ocr_noise():
+    assert normalize_receipt_search_query("MCCAINS FROZEN:PEAS 500GRAM") == (
+        "mccains frozen peas"
+    )
+    assert normalize_receipt_search_query("SOMAT EXCELLENCE CAP 74PACK") == (
+        "somat excellence tablets"
+    )

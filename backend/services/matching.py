@@ -49,6 +49,27 @@ HOMEBRAND_KEYWORDS = (
     "simply",
 )
 
+RECEIPT_STORE_PREFIX = re.compile(r"^(?:coles|woolworths|ww)\s+", re.IGNORECASE)
+RECEIPT_SIZE = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:kg|g|gram|grams|ml|l|litre|litres|pack|pk|each|perkg)\b",
+    re.IGNORECASE,
+)
+RECEIPT_PACK_COUNT = re.compile(r"\b\d+\s*pack\b", re.IGNORECASE)
+
+
+def normalize_receipt_search_query(item: str) -> str:
+    """Turn a raw receipt line into a cleaner store search query."""
+    text = item.strip()
+    text = RECEIPT_STORE_PREFIX.sub("", text)
+    text = re.sub(r"[:/]", " ", text)
+    text = RECEIPT_SIZE.sub("", text)
+    text = RECEIPT_PACK_COUNT.sub("", text)
+    text = re.sub(r"\bperkg\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\ble\b", "lean", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bcap\b", "tablets", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text or item.strip().lower()
+
 
 def expand_staple_query(query: str) -> str:
     """Expand common single-word staples to a more specific search term."""

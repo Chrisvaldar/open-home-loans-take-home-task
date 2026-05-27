@@ -11,11 +11,14 @@ router = APIRouter()
 class CompareRequest(BaseModel):
     items: list[str]
     receipt_text: Optional[str] = None
+    source: Optional[str] = "manual"
 
 
 @router.post("/compare")
 def compare(request: CompareRequest):
     try:
-        return compare_basket(request.items)
+        source = request.source or "manual"
+        print(f"[compare router] source={source!r} items={len(request.items)}")
+        return compare_basket(request.items, source=source)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -20,13 +20,14 @@ async function getErrorMessage(response, fallback) {
 
 /**
  * @param {string[]} items
+ * @param {string} [source='manual']
  * @returns {Promise<import('./types.js').CompareResponse>}
  */
-export async function compareBasket(items) {
+export async function compareBasket(items, source = 'manual') {
   const response = await fetch('/api/compare', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, source }),
   });
 
   if (!response.ok) {
