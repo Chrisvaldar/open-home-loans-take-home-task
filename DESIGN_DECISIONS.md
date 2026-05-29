@@ -60,11 +60,63 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 ---
 
-### No caching, auth, or rate limiting (assessment scope)
+### In-memory search cache (15 minute TTL)
 
-**Decision:** Each compare hits live APIs synchronously per item per store. No user accounts.
+**Decision:** Woolworths and Coles `search_item()` results are cached in-process keyed by `(store, normalised_query, page_size)`. Default TTL is **900 seconds** (15 minutes), overridable via `SEARCH_CACHE_TTL_SECONDS`.
 
-**Why:** Acceptable for a take-home demo. Documented as a known limitation in [PROJECT_STATE.md](PROJECT_STATE.md).
+**Why:** Repeated compares (same staples, demo clicks, compare again) should not re-hit RapidAPI. In-memory only keeps the assessment scope simple; no Redis.
+
+**Reference:** [`backend/services/cache.py`](backend/services/cache.py), [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py).
+
+---
+
+### Parallel store and item searches
+
+**Decision:** For each list item, Woolworths and Coles API searches run concurrently via `ThreadPoolExecutor` (max 2 workers). Across items, up to **5** items are processed in parallel (`MAX_CONCURRENT_ITEMS` in `compare.py`).
+
+**Why:** Compare latency was dominated by sequential HTTP calls (2 stores x N items). Parallelism cuts wall-clock time without changing matching logic. The item cap avoids hammering RapidAPI on long lists.
+
+**Reference:** [`backend/services/compare.py`](backend/services/compare.py) (`_search_both_stores`, `compare_basket`).
+
+---
+
+### Per-IP rate limiting on API routes
+
+**Decision:** Middleware on `/api/*` enforces **30 requests per minute per IP** (configurable via `RATE_LIMIT_PER_MINUTE`). Over-limit requests return **429** with `{"detail": "Rate limit exceeded. Try again shortly."}`. `GET /health` is exempt.
+
+**Why:** Basic abuse protection for a public demo API without adding auth. In-memory sliding window per IP; no external store.
+
+**Reference:** [`backend/services/rate_limit.py`](backend/services/rate_limit.py), [`backend/main.py`](backend/main.py).
+
+---
+
+### Health check endpoint
+
+**Decision:** `GET /health` returns `200` and `{"status": "ok"}` with no downstream API calls.
+
+**Why:** Lets deploy platforms and uptime checks verify the process without spending RapidAPI quota.
+
+**Reference:** [`backend/main.py`](backend/main.py).
+
+---
+
+### Gated RapidAPI debug logging
+
+**Decision:** Full JSON dumps from Woolworths/Coles search responses print only when `DEBUG_API_RESPONSES=true`. Default is off. One-line query logs and cache-hit logs always print.
+
+**Why:** Verbose `json.dumps(..., indent=2)` on every search cluttered logs in normal use but remains available for local debugging.
+
+**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/.env.example`](backend/.env.example).
+
+---
+
+### Product URLs in compare response
+
+**Decision:** Normalised store search results and API `StoreProduct` objects include a `url` field from RapidAPI (`item.get("url") or ""`). Empty string when missing; frontend shows a link only when truthy.
+
+**Why:** Shoppers can open the matched product on the store site. URLs were returned by the API but previously dropped in normalisation.
+
+**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
 
 ---
 
@@ -278,13 +330,43 @@ Branded query logic was not changed.
 
 ---
 
+### Receipt scan then manual review before compare
+
+**Decision:** Receipt upload runs OCR only (`scanReceipt`). Extracted items populate the **Build list** tab; the user edits the list and clicks **Compare** themselves. Compare uses `source: 'receipt'` when the list came from a scan (Groq reranker path). `source` resets to `'manual'` on **Clear list** only; add/remove edits keep `'receipt'` for that session.
+
+**Why:** OCR lines need human review; auto-compare skipped the same review step as a hand-typed list. Staying on `view='list'` after scan avoids a misleading full-screen loading state.
+
+**Reference:** [`frontend/src/components/ReceiptUpload.jsx`](frontend/src/components/ReceiptUpload.jsx), [`frontend/src/components/ListBuilder.jsx`](frontend/src/components/ListBuilder.jsx), [`frontend/src/App.jsx`](frontend/src/App.jsx).
+
+---
+
+### Specials summary on results hero
+
+**Decision:** When any breakdown row has `on_special` at a store, show a compact line under annualised savings, e.g. `3 items on special at Woolworths · 1 at Coles`. Hidden when both counts are zero.
+
+**Why:** Reinforces the brief's "specials this week" angle without a new screen or filtering the table.
+
+**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
+
+---
+
+### View on store product links
+
+**Decision:** In the breakdown table/cards, matched products with a non-empty `url` show **View on Woolworths** or **View on Coles** (label from column context). Links use `target="_blank"` and `rel="noopener noreferrer"`, styled `text-xs text-accent hover:underline`.
+
+**Why:** Click-through to the store product page; no link when URL missing or cell is "Not found".
+
+**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) (`StoreProductCell`).
+
+---
+
 ## Testing
 
 ### Backend unit tests with mocked APIs
 
-**Decision:** `test_compare.py` mocks Woolworths/Coles search; `test_matching.py` tests pure matching helpers.
+**Decision:** `test_compare.py` mocks Woolworths/Coles search; `test_matching.py` tests pure matching helpers; `test_cache.py` covers cache hit/miss/TTL; `test_rate_limit.py` covers 429 behaviour and `/health` exemption via `TestClient`.
 
-**Why:** Compare tests must not hit live RapidAPI. Matching tests run fast without network.
+**Why:** Compare tests must not hit live RapidAPI. Cache and rate-limit tests run fast without network and lock in production-hardening behaviour.
 
 ---
 
