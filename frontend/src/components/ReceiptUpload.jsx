@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { compareBasket, scanReceipt } from '../lib/api.js';
+import { scanReceipt } from '../lib/api.js';
 import { fileToBase64, getFileMimeType } from '../lib/format.js';
 import uploadIcon from '../../frontend_design_references/icons/upload/upload-m.svg';
 
@@ -26,12 +26,11 @@ function isAllowedImageType(file) {
 
 /**
  * @param {{
- *   onCompareStart?: () => void,
- *   onCompareSuccess: (results: import('../lib/types.js').CompareResponse) => void,
+ *   onReceiptItemsExtracted: (items: string[]) => void,
  *   onError?: (message: string) => void,
  * }} props
  */
-export default function ReceiptUpload({ onCompareStart, onCompareSuccess, onError }) {
+export default function ReceiptUpload({ onReceiptItemsExtracted, onError }) {
   const inputRef = useRef(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
@@ -71,9 +70,7 @@ export default function ReceiptUpload({ onCompareStart, onCompareSuccess, onErro
         return;
       }
 
-      onCompareStart?.();
-      const results = await compareBasket(data.items, 'receipt');
-      onCompareSuccess(results);
+      onReceiptItemsExtracted(data.items);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Receipt scan failed.';
@@ -115,8 +112,8 @@ export default function ReceiptUpload({ onCompareStart, onCompareSuccess, onErro
           Upload a receipt photo
         </p>
         <p className="mt-1 text-sm text-text-secondary">
-          JPEG, PNG, HEIC, or WebP up to 4 MB. We&apos;ll scan and compare
-          prices straight away.
+          JPEG, PNG, HEIC, or WebP up to 4 MB. We&apos;ll extract items so you
+          can review them before comparing.
         </p>
 
         <input
@@ -134,7 +131,7 @@ export default function ReceiptUpload({ onCompareStart, onCompareSuccess, onErro
           onClick={() => inputRef.current?.click()}
           className="mt-6 rounded-md border border-border-default bg-white px-6 py-3 text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {scanning ? 'Scanning receipt…' : 'Scan and compare'}
+          {scanning ? 'Scanning receipt…' : 'Scan receipt'}
         </button>
 
         {scanning && (
@@ -143,7 +140,7 @@ export default function ReceiptUpload({ onCompareStart, onCompareSuccess, onErro
               className="spinner h-4 w-4 rounded-full border-2 border-border-default border-t-accent"
               aria-hidden="true"
             />
-            Extracting items and comparing prices
+            Extracting items from your receipt
           </div>
         )}
       </div>

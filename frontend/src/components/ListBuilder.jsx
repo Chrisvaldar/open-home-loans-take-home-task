@@ -6,8 +6,8 @@ import ReceiptUpload from './ReceiptUpload.jsx';
  *   items: string[],
  *   setItems: React.Dispatch<React.SetStateAction<string[]>>,
  *   onCompare: () => void,
- *   onReceiptCompareStart?: () => void,
- *   onReceiptCompareSuccess: (results: import('../lib/types.js').CompareResponse) => void,
+ *   onReceiptItemsExtracted: (items: string[]) => void,
+ *   onClearList: () => void,
  *   onReceiptError?: (message: string) => void,
  * }} props
  */
@@ -15,12 +15,13 @@ export default function ListBuilder({
   items,
   setItems,
   onCompare,
-  onReceiptCompareStart,
-  onReceiptCompareSuccess,
+  onReceiptItemsExtracted,
+  onClearList,
   onReceiptError,
 }) {
   const [inputValue, setInputValue] = useState('');
   const [activeTab, setActiveTab] = useState('manual');
+  const [showReceiptReviewBanner, setShowReceiptReviewBanner] = useState(false);
 
   const addItem = () => {
     const trimmed = inputValue.trim();
@@ -45,7 +46,8 @@ export default function ListBuilder({
   };
 
   const clearList = () => {
-    setItems([]);
+    onClearList();
+    setShowReceiptReviewBanner(false);
   };
 
   const handleSubmit = (event) => {
@@ -53,8 +55,20 @@ export default function ListBuilder({
     addItem();
   };
 
-  const handleReceiptCompareSuccess = (results) => {
-    onReceiptCompareSuccess(results);
+  const handleReceiptItemsExtracted = (extractedItems) => {
+    onReceiptItemsExtracted(extractedItems);
+    setActiveTab('manual');
+    setShowReceiptReviewBanner(true);
+  };
+
+  const handleCompare = () => {
+    setShowReceiptReviewBanner(false);
+    onCompare();
+  };
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    setShowReceiptReviewBanner(false);
   };
 
   return (
@@ -62,7 +76,7 @@ export default function ListBuilder({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setActiveTab('manual')}
+          onClick={() => switchTab('manual')}
           className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
             activeTab === 'manual'
               ? 'bg-white text-black'
@@ -73,7 +87,7 @@ export default function ListBuilder({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('receipt')}
+          onClick={() => switchTab('receipt')}
           className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
             activeTab === 'receipt'
               ? 'bg-white text-black'
@@ -86,6 +100,15 @@ export default function ListBuilder({
 
       {activeTab === 'manual' ? (
         <div className="space-y-6">
+          {showReceiptReviewBanner && (
+            <div
+              role="status"
+              className="rounded-lg border border-accent bg-surface-secondary px-4 py-3 text-sm text-text-primary"
+            >
+              Review items from your receipt, edit if needed, then compare.
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
@@ -152,7 +175,7 @@ export default function ListBuilder({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
-              onClick={onCompare}
+              onClick={handleCompare}
               disabled={items.length === 0}
               className="w-full rounded-md bg-accent px-6 py-3 text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
@@ -171,8 +194,7 @@ export default function ListBuilder({
         </div>
       ) : (
         <ReceiptUpload
-          onCompareStart={onReceiptCompareStart}
-          onCompareSuccess={handleReceiptCompareSuccess}
+          onReceiptItemsExtracted={handleReceiptItemsExtracted}
           onError={onReceiptError}
         />
       )}

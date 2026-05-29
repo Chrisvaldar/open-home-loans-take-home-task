@@ -10,6 +10,7 @@ export default function App() {
   const [view, setView] = useState('list');
   const [results, setResults] = useState(null);
   const [items, setItems] = useState([]);
+  const [compareSource, setCompareSource] = useState('manual');
   const [error, setError] = useState(null);
 
   const handleCompare = async () => {
@@ -23,7 +24,7 @@ export default function App() {
     setView('loading');
 
     try {
-      const data = await compareBasket(items);
+      const data = await compareBasket(items, compareSource);
       setResults(data);
       setView('results');
     } catch (err) {
@@ -34,21 +35,20 @@ export default function App() {
     }
   };
 
-  const handleReceiptCompareStart = () => {
+  const handleReceiptItemsExtracted = (extractedItems) => {
+    setItems(extractedItems);
+    setCompareSource('receipt');
     setError(null);
-    setView('loading');
   };
 
-  const handleReceiptCompareSuccess = (data) => {
-    setItems(data.breakdown.map((row) => row.item));
-    setResults(data);
-    setError(null);
-    setView('results');
+  const handleClearList = () => {
+    setItems([]);
+    setCompareSource('manual');
   };
 
   const handleReceiptError = (message) => {
     setError(message);
-    setView((current) => (current === 'loading' ? 'error' : 'list'));
+    setView('list');
   };
 
   const handleCompareAgain = () => {
@@ -77,8 +77,8 @@ export default function App() {
             items={items}
             setItems={setItems}
             onCompare={handleCompare}
-            onReceiptCompareStart={handleReceiptCompareStart}
-            onReceiptCompareSuccess={handleReceiptCompareSuccess}
+            onReceiptItemsExtracted={handleReceiptItemsExtracted}
+            onClearList={handleClearList}
             onReceiptError={handleReceiptError}
           />
         )}
