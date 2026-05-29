@@ -1,274 +1,234 @@
 # Design Decisions
 
-A running log of product and engineering choices for **Frugl**. Add new entries here whenever a meaningful decision is made or revisited.
-
-## How to use this file
-
-When making a choice that affects behaviour, UX, or architecture:
-
-1. Add a dated subsection under the relevant heading (or create a new heading).
-2. State **Decision**, **Why**, and any **Problem / fix / follow-up**.
-3. Link to code or docs where helpful.
+Product and engineering choices for **Frugl**. The sections at the top are the ones that actually drive compare results.
 
 ---
 
-## Architecture and stack
+## How compare picks products (quick map)
 
-### Vite + React instead of Next.js
+| List source | Store search | Pick match per store |
+|-------------|--------------|----------------------|
+| Manual typing (`source: manual`) | RapidAPI, top 3 (10 for receipt-normalised queries N/A) | **String matcher** in `matching.py` |
+| After receipt scan (`source: receipt`) | RapidAPI, up to **10** candidates per store | **Groq reranker** in `groq_reranker.py` |
 
-**Decision:** Keep the existing Vite + React SPA rather than migrating to Next.js.
+Shared steps for both: `detect_search_type()` (brand vs generic), staple expansion for vague words, unit-price comparison when sizes parse, cross-store **Special** inference when the API has no was-price.
 
-**Why:** The app is a single-user comparison flow (list, loading, results) with no SEO requirement. Vite was already scaffolded with Tailwind, a dev proxy, and `api.js`. Next.js would add routing and deployment complexity without clear benefit for this assessment scope. React is also the frontend framework I'm comfortable with.
-
----
-
-### FastAPI backend with a REST boundary
-
-**Decision:** All Woolworths, Coles, and Gemini calls run server-side. The frontend only talks to `/api/compare` and `/api/receipt`.
-
-**Why:** Protects API keys (`RAPIDAPI_KEY`, `GEMINI_API_KEY`), keeps matching and comparison logic testable in Python, and separates UI from data orchestration. FastAPI is my main backend stack.
-
----
-
-### View state in `App.jsx` (no React Router)
-
-**Decision:** Use `useState` for `view` (`list` | `loading` | `results` | `error`) rather than URL-based routing.
-
-**Why:** Four screens with linear flow. Router adds boilerplate without user benefit for a demo. Easily changeable for production requirements.
-
----
-
-## Data and external APIs
-
-### Live RapidAPI pricing for both stores
-
-**Decision:** Woolworths and Coles product search both go through RapidAPI (data-holdings-group), one `RAPIDAPI_KEY`, `page_size=3` per search.
-
-**Why:** Same interface for both chains; free tier sufficient for demo. Take top 3 results and pick the best match rather than blindly using rank 1.
-
----
-
-### Google Gemini for receipt OCR
-
-**Decision:** Receipt images are sent to `gemini-2.5-flash` via `google-genai`; returns a JSON array of item strings.
-
-**Why:** Receipt scanning was added after the initial brief. Gemini handles varied receipt layouts better than hand-rolled OCR. Failures return `[]` rather than crashing the endpoint.
-
----
-
-### In-memory search cache (15 minute TTL)
-
-**Decision:** Woolworths and Coles `search_item()` results are cached in-process keyed by `(store, normalised_query, page_size)`. Default TTL is **900 seconds** (15 minutes), overridable via `SEARCH_CACHE_TTL_SECONDS`.
-
-**Why:** Repeated compares (same staples, demo clicks, compare again) should not re-hit RapidAPI. In-memory only keeps the assessment scope simple; no Redis.
-
-**Reference:** [`backend/services/cache.py`](backend/services/cache.py), [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py).
-
----
-
-### Parallel store and item searches
-
-**Decision:** For each list item, Woolworths and Coles API searches run concurrently via `ThreadPoolExecutor` (max 2 workers). Across items, up to **5** items are processed in parallel (`MAX_CONCURRENT_ITEMS` in `compare.py`).
-
-**Why:** Compare latency was dominated by sequential HTTP calls (2 stores x N items). Parallelism cuts wall-clock time without changing matching logic. The item cap avoids hammering RapidAPI on long lists.
-
-**Reference:** [`backend/services/compare.py`](backend/services/compare.py) (`_search_both_stores`, `compare_basket`).
-
----
-
-### Per-IP rate limiting on API routes
-
-**Decision:** Middleware on `/api/*` enforces **30 requests per minute per IP** (configurable via `RATE_LIMIT_PER_MINUTE`). Over-limit requests return **429** with `{"detail": "Rate limit exceeded. Try again shortly."}`. `GET /health` is exempt.
-
-**Why:** Basic abuse protection for a public demo API without adding auth. In-memory sliding window per IP; no external store.
-
-**Reference:** [`backend/services/rate_limit.py`](backend/services/rate_limit.py), [`backend/main.py`](backend/main.py).
-
----
-
-### Health check endpoint
-
-**Decision:** `GET /health` returns `200` and `{"status": "ok"}` with no downstream API calls.
-
-**Why:** Lets deploy platforms and uptime checks verify the process without spending RapidAPI quota.
-
-**Reference:** [`backend/main.py`](backend/main.py).
-
----
-
-### Gated RapidAPI debug logging
-
-**Decision:** Full JSON dumps from Woolworths/Coles search responses print only when `DEBUG_API_RESPONSES=true`. Default is off. One-line query logs and cache-hit logs always print.
-
-**Why:** Verbose `json.dumps(..., indent=2)` on every search cluttered logs in normal use but remains available for local debugging.
-
-**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/.env.example`](backend/.env.example).
-
----
-
-### Special badge: API detection plus cross-store inference
-
-**Decision:** Surface a yellow **Special** badge in results when `on_special` is true. Detection uses two layers:
-
-1. **Primary (store search):** In `woolworths.py` and `coles.py`, set `on_special` when the API item includes `was_price` or `original_price` and `current_price` is lower than that value. If neither field exists, leave `on_special` false at this stage.
-2. **Fallback (compare):** In `compare.py`, `_infer_cross_store_special()` marks the cheaper store as on special when both stores matched the same brand and pack size and one price is at least 15% lower than the other.
-
-**Why:** Live RapidAPI search responses for Woolworths and Coles typically only return `current_price`, name, brand, size, and URL. They do not include `was_price`, `original_price`, or `on_special`, so the primary check alone never fires. Without the fallback, the badge would never appear despite obvious gaps like Kirk's lemonade at $1.80 vs $3.00.
-
-**Caveat:** The fallback is an inference, not a fact. A large cross-store price gap might mean a weekly special, but it could also be a permanent shelf-price difference, a data lag, or mismatched promo timing. We label the badge **Special** (not "On special") to keep the wording neutral. If the APIs later expose reliable was/original pricing, prefer that and treat inference as a last resort only.
-
-**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
-
----
-
-### Groq reranker for receipt items
-
-**Decision:** When `compare_basket(..., source="receipt")`, pick store matches via `rerank_with_groq()` (`llama-3.1-8b-instant`, `GROQ_API_KEY`) instead of string matching. Receipt lines are normalized with `normalize_receipt_search_query()` before API search; up to 10 candidates per store.
-
-**Why:** Receipt OCR lines are noisy; string matcher picked cheapest partial overlap (gravy for Somat, beer for beef). Groq reads receipt line plus numbered candidates and returns an index or `-1`.
-
-**Strict matching (2026-05-27):** Default to `-1` unless product type, brand, size, and name all align. Rejects pet food, wrong variants, denture tablets, etc.
-
-**Produce exception (2026-05-27):** Fresh produce (fruit, vegetable, meat) may match when core ingredient aligns even if word order differs or sold by each/kg (e.g. `brown onions` → `Onion Brown each $0.63`). Prevents Woolworths loose produce being rejected while gravy/wine candidates are in the pool.
-
-**Produce-specific rules (2026-05-27):** `is_produce_query()` detects produce keywords (onion, cabbage, beef, etc.). When true, the Groq prompt adds stricter rules: reject processed/packaged candidates (gravy, mix, tin, sauce, wine, soup, pet, dog); require same variety (green cabbage not wombok/savoy/red; brown onion not spring onion/shallot); return `-1` if no clear fresh match.
-
-**Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/tests/test_groq_reranker.py`](backend/tests/test_groq_reranker.py), [`backend/services/receipt.py`](backend/services/receipt.py) (Gemini search-friendly extraction).
+**Code:** [`backend/services/compare.py`](backend/services/compare.py), [`backend/services/matching.py`](backend/services/matching.py), [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py).
 
 ---
 
 ## Product matching
 
-### Two paths: branded vs generic
+### Branded vs generic (still how it works)
 
-**Decision:** `detect_search_type()` checks a hardcoded brand list (17 brands). Branded queries filter results to products whose name or brand contains that brand word. Generic queries (e.g. `"milk"`, `"bread"`) compare across whatever brand the matcher selects at each store.
+**Decision:** `detect_search_type()` in `matching.py` checks the query against a hardcoded list of **17 brands** (`BRAND_LIST`: a2, Devondale, Bega, etc.). Match is **whole-word** (`\b` regex), so `"bread"` stays generic and `"a2 milk"` is branded.
 
-**Why:** Branded items (e.g. `"a2 milk 2L"`) must not silently substitute a different brand. Generic items intentionally allow different homebrand products per store, with a note in the response.
+- **Branded:** only API results whose **name or brand field** contain that brand word are considered. Then the best match is chosen from that filtered list (see string scoring below). If nothing passes the brand filter, that store returns no match.
+- **Generic:** e.g. `"milk"`, `"bread"`. Different brands per store are allowed; the response can note when brands differ. Matcher prefers **homebrand** and **cheapest pack price** among good string matches.
 
----
+**Why:** Branded list items must not swap to homebrand milk. Generic list items are about cheap weekly staples, not forcing the same national brand at both chains.
 
-### String matching for product selection (and its failure mode)
-
-**Decision:** Use word-subset boosting plus `difflib.SequenceMatcher` to score API candidates, not embeddings or an LLM reranker (for now).
-
-**Why:** Zero extra latency or cost; good enough for branded queries and multi-word generic queries. Implemented entirely in stdlib.
-
-**Problem observed:** Generic query `"bread"` matched Coles product **"Inspired Mud Cake"** because the brand field was **"Fairy Bread"**. Scoring took `max(name_score, brand_score)`, so the brand hit scored 0.8 via word-subset match even though the product name had nothing to do with bread.
-
-**Fix (2026-05-27):** Three targeted changes to generic matching only:
-
-1. Score against **product name only**, never brand.
-2. For **single-word** generic queries, require at least one query word in the product **name**. If no candidate passes, return `None` (no_match) instead of a bad pick.
-3. Generic similarity threshold via `GENERIC_SIMILARITY_THRESHOLD` (see history below).
-
-Branded query logic was not changed.
-
-**Update (2026-05-27):** Threshold 0.4 caused asymmetric results: Coles short names (e.g. `"Light Milk"`) passed while longer Woolworths names scored below threshold and returned no_match. Lowered generic threshold to **0.25**.
+**Reference:** [`backend/services/matching.py`](backend/services/matching.py) (`detect_search_type`, `_brand_in_query`, `pick_best_match`).
 
 ---
 
-### Staple intent map for vague single-word queries
+### String matching for manual lists
 
-**Decision:** Before calling the store search APIs, expand exact single-word staples via `STAPLE_INTENT_MAP` in `matching.py` (e.g. `"milk"` to `"full cream milk 2L"`, `"bread"` to `"white sandwich bread loaf"`). Original list item text is kept for display and for `pick_best_match`; only the API search term changes.
+**Decision:** For `source: manual` only, rank candidates with **word-subset boost** (score 0.8 when query words sit in the target text with enough coverage) plus `difflib.SequenceMatcher`. No embeddings. No Groq on this path.
 
-**Why:** Shoppers typing `"bread"` or `"milk"` usually mean a standard loaf or homebrand milk, not Turkish bread or premium a2. String matching alone cannot infer that. A small curated map (~10 staples) is explicit, testable, and aligned with finding cheaper comparable products.
+**Branded scoring:** After the brand filter, score each candidate with `max(name_similarity, brand_similarity)` against the **original list line** (not only the expanded search term).
 
-**Implementation:** `expand_staple_query()` in `matching.py`; called from `compare_basket()` before `search_woolworths` / `search_coles`.
+**Generic scoring:** Score **product name only** (never brand). Threshold `GENERIC_SIMILARITY_THRESHOLD = 0.25`. Single-word generics must have at least one query word in the product **name** or the store gets no match.
 
-**Update (2026-05-27):** Generic matching now uses the expanded `search_term` (not the original single word) when scoring and filtering API results. That fixes Woolworths `"Not found"` when the expanded search returns products whose names match `"white sandwich bread loaf"` but not the lone word `"bread"`.
+**Problem we hit:** `"bread"` matched Coles **"Inspired Mud Cake"** because brand was `"Fairy Bread"` and brand score won. Fixed by name-only scoring on the generic path (2026-05-27).
 
----
-
-### Cheapest homebrand preference for generic matches
-
-**Decision:** Among generic candidates that pass the similarity threshold, prefer products whose name or brand contains a homebrand keyword (`woolworths`, `coles`, `homebrand`, `select`, etc.). From that pool, pick the **lowest pack price**. If no homebrand candidate qualifies, pick the cheapest overall.
-
-**Why:** The app compares weekly shop cost. Premium matches (e.g. a2 milk at $6.90) are valid string matches but wrong for a vague `"milk"` list item. Shoppers without context usually mean the cheapest comparable staple.
-
-**Scope:** Generic path only; branded queries unchanged.
-
-**Update (2026-05-27):** Generic staple queries (e.g. `"milk"`) now search each store with a store-prefixed term (`"woolworths full cream milk 2L"`, `"coles full cream milk 2L"`) so homebrand products appear in API results. Without this, a generic search returned national brands (Dairy Farmers, Devondale) that pass matching but are not the cheapest own-brand lines.
+**Reference:** [`backend/services/matching.py`](backend/services/matching.py) (`_similarity_score`, `pick_best_match`).
 
 ---
 
-### Word-subset boost for short generic queries
+### Strict brand filter (branded only)
 
-**Decision:** If all query words appear in the target string and word coverage is at least 50%, score 0.8 instead of relying on SequenceMatcher alone.
+**Decision:** If the query contains a known brand but **no** API result has that brand in name or brand field, return `None` for that store instead of guessing.
 
-**Why:** SequenceMatcher penalises length differences, so `"milk"` vs `"Woolworths Full Cream Milk 2L"` scored below 0.3 even when clearly relevant. Subset boost fixes multi-word and short-name cases.
-
-**History:** Original threshold was 0.3; lowered to 0.15 as a safety net after subset boost was added. Generic path used 0.4 briefly (too strict, Woolworths asymmetry); now **0.25**.
+**Why:** `"a2 milk 2L"` should not fall back to Woolworths homebrand. UI shows no match / no comparison with a clear note.
 
 ---
 
-### Unit price normalisation for fair comparison
+### Staple intent map (generic vague words)
 
-**Decision:** When both products have parseable sizes (e.g. `2L` vs `1L`), compare **per 100ml / per 100g** unit prices for winner and saving. Fall back to pack price when sizes are not normalisable.
+**Decision:** Exact single-word staples in `STAPLE_INTENT_MAP` expand before search (e.g. `"milk"` → `"full cream milk 2L"`). Display text stays the user's word; matching uses the expanded `search_term` for generic scoring.
 
-**Why:** Comparing a 2L pack to a 1L pack on pack price alone is misleading. Saving uses the same basis as the winner (unit delta or pack delta).
+**Decision (staples at each store):** For generic staples, search with `store_staple_search_term()` so Woolworths gets `"woolworths full cream milk 2L"` and Coles gets `"coles full cream milk 2L"` so own-brand lines show up in API results.
 
----
+**Why:** `"milk"` alone returns national brands that string-match but are not the cheap line shoppers mean.
 
-### Strict brand filter for branded searches
-
-**Decision:** If no API result contains the queried brand word, return `None` for that store rather than picking a substitute.
-
-**Why:** User searching `"a2 milk"` expects a2, not homebrand milk. Produces `no_comparison` with an explicit note.
+**Reference:** [`backend/services/matching.py`](backend/services/matching.py) (`STAPLE_INTENT_MAP`, `expand_staple_query`, `store_staple_search_term`).
 
 ---
 
-## Comparison and pricing logic
+### Cheapest homebrand preference (generic only)
 
-### Basket winner uses sum of pack prices
+**Decision:** Among generic candidates above the similarity threshold, prefer items whose name or brand contains a homebrand keyword (`woolworths`, `coles`, `homebrand`, `select`, etc.). From that pool, pick **lowest pack price**. If none qualify, cheapest in the whole passing set.
 
-**Decision:** Overall winner sums pack prices for items where both stores matched. Tie if totals within **$0.50**; savings set to 0 on tie.
-
-**Why:** Simple, explainable totals for the hero banner. Not an optimised "shop only at winner store" basket.
+**Why:** Weekly shop comparison should not pick a2 at $6.90 when the user only typed `"milk"`.
 
 ---
 
-### Per-item tie threshold
+### Groq reranker for receipt compares
 
-**Decision:** Item-level tie if prices within 1 cent or 2% relative.
+**Decision:** When `compare_basket(..., source="receipt")`, **do not** use `pick_best_match`. Use `rerank_with_groq()` (`llama-3.1-8b-instant`) on up to 10 candidates per store. Receipt lines are cleaned with `normalize_receipt_search_query()` before search.
 
-**Why:** Avoid calling a winner on noise from floating point or trivial differences.
+**Why:** OCR strings are messy; string match chose wrong products (gravy for Somat, beer for beef).
 
----
+**Rules in the prompt:** Default **no match** (`-1`) unless type, brand, size, and name line up. Extra produce rules: reject processed/packaged noise, match variety (brown onion not spring onion), still return `-1` if nothing fits.
 
-### Error handling via dedicated `error` view
-
-**Decision:** Failed compare calls set `view='error'` with a notification-style banner and "Try again" (preserves list items). Receipt errors show inline in `ReceiptUpload`.
-
-**Why:** Compare failures are blocking; receipt failures are local to the upload tab.
+**Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/tests/test_groq_reranker.py`](backend/tests/test_groq_reranker.py).
 
 ---
 
-### Receipt scan then manual review before compare
+### Unit price normalisation
 
-**Decision:** Receipt upload runs OCR only (`scanReceipt`). Extracted items populate the **Build list** tab; the user edits the list and clicks **Compare** themselves. Compare uses `source: 'receipt'` when the list came from a scan (Groq reranker path). `source` resets to `'manual'` on **Clear list** only; add/remove edits keep `'receipt'` for that session.
+**Decision:** When both matched products have parseable sizes (`2L`, `700g`, multipack, etc.), item winner and saving use **per 100ml / per 100g**. Otherwise pack price.
 
-**Why:** OCR lines need human review; auto-compare skipped the same review step as a hand-typed list. Staying on `view='list'` after scan avoids a misleading full-screen loading state.
+**Why:** A 2L vs 1L pack should not call the smaller pack "cheaper" on pack price alone.
 
-**Reference:** [`frontend/src/components/ReceiptUpload.jsx`](frontend/src/components/ReceiptUpload.jsx), [`frontend/src/components/ListBuilder.jsx`](frontend/src/components/ListBuilder.jsx), [`frontend/src/App.jsx`](frontend/src/App.jsx).
+**Reference:** [`backend/services/matching.py`](backend/services/matching.py) (`normalise_unit_price`), [`backend/services/compare.py`](backend/services/compare.py) (`_item_winner`).
+
+---
+
+## Pricing, specials, and basket winner
+
+### Basket totals and ties
+
+**Decision:** Overall winner = sum of **pack prices** for items where both stores matched. Tie if Woolworths total vs Coles total within **$0.50** (savings 0). Per-item tie if within 1 cent or 2% relative.
+
+**Decision:** `annualised_savings = weekly savings × 52` for the hero line.
+
+**Why:** Simple story for the banner. Not a "split your shop across two stores" optimiser.
+
+---
+
+### Special badge (`on_special`)
+
+**Decision:** Yellow **Special** badge when `on_special` is true. Two layers:
+
+1. **API (usually inactive):** `was_price` / `original_price` lower than `current_price` in Woolworths/Coles normalisation.
+2. **Fallback (what we rely on):** `_infer_cross_store_special()` in `compare.py` when both stores matched same brand + pack size and one price is **≥15%** lower. Marks the cheaper side as on special.
+
+**Caveat:** Fallback is inference (price gap might be permanent, not a promo). Label is **Special**, not "On special".
+
+**Reference:** [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
 
 ---
 
 ### Specials summary on results hero
 
-**Decision:** When any breakdown row has `on_special` at a store, show a compact line under annualised savings, e.g. `3 items on special at Woolworths · 1 at Coles`. Hidden when both counts are zero.
-
-**Why:** Reinforces the brief's "specials this week" angle without a new screen or filtering the table.
+**Decision:** Count breakdown rows where `woolworths.on_special` or `coles.on_special` is true. Show e.g. `3 items on special at Woolworths · 1 at Coles` under annualised savings. Hide if both counts are zero.
 
 **Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
 
 ---
 
-## Testing
+## Receipt and compare flow
 
-### Backend unit tests with mocked APIs
+### Google Gemini for receipt OCR
 
-**Decision:** `test_compare.py` mocks Woolworths/Coles search; `test_matching.py` tests pure matching helpers; `test_cache.py` covers cache hit/miss/TTL; `test_rate_limit.py` covers 429 behaviour and `/health` exemption via `TestClient`.
+**Decision:** Receipt images → `gemini-2.5-flash`; JSON array of item strings. Parse strips markdown fences. Empty list on failure, not a 500.
 
-**Why:** Compare tests must not hit live RapidAPI. Cache and rate-limit tests run fast without network and lock in production-hardening behaviour.
+**Reference:** [`backend/services/receipt.py`](backend/services/receipt.py).
 
 ---
+
+### Receipt scan, then manual review
+
+**Decision:** Upload only runs OCR. Items fill **Build list**; user edits, then **Compare**. `source: 'receipt'` until **Clear list** (edits alone keep receipt source for Groq).
+
+**Reference:** [`frontend/src/components/ReceiptUpload.jsx`](frontend/src/components/ReceiptUpload.jsx), [`frontend/src/App.jsx`](frontend/src/App.jsx).
+
+---
+
+## Frontend (selected)
+
+### View state in `App.jsx` (no React Router)
+
+**Decision:** `view`: `list` | `loading` | `results` | `error`. Linear SPA, no URL routes.
+
+---
+
+### Product links in breakdown
+
+**Decision:** `url` from RapidAPI through to `StoreProduct`. **View on Woolworths / Coles** when non-empty; `target="_blank"`, `rel="noopener noreferrer"`.
+
+---
+
+### Error handling
+
+**Decision:** Compare failure → `error` view with list kept. Receipt errors inline on the upload tab.
+
+---
+
+## Data and backend operations
+
+### Live RapidAPI for both stores
+
+**Decision:** One `RAPIDAPI_KEY`, `page_size=3` default (10 for receipt searches). Pick best match from results, not always rank 1.
+
+---
+
+### In-memory search cache
+
+**Decision:** Cache key `(store, normalised_query, page_size)`, TTL default 900s (`SEARCH_CACHE_TTL_SECONDS`).
+
+**Reference:** [`backend/services/cache.py`](backend/services/cache.py).
+
+---
+
+### Parallel searches
+
+**Decision:** Woolworths + Coles in parallel per item; up to 5 items in parallel across the basket.
+
+**Reference:** [`backend/services/compare.py`](backend/services/compare.py).
+
+---
+
+### Rate limiting and health
+
+**Decision:** `/api/*` limited to 30 req/min/IP by default (`RATE_LIMIT_PER_MINUTE`). `GET /health` → `{"status":"ok"}`, not rate limited.
+
+**Reference:** [`backend/services/rate_limit.py`](backend/services/rate_limit.py), [`backend/main.py`](backend/main.py).
+
+---
+
+### Gated API debug logs
+
+**Decision:** Full RapidAPI JSON only if `DEBUG_API_RESPONSES=true`.
+
+---
+
+## Architecture
+
+### Vite + React (not Next.js)
+
+**Decision:** Stay on Vite SPA. No SEO need; FastAPI stays the API boundary.
+
+---
+
+### FastAPI + server-side keys
+
+**Decision:** All store and LLM calls server-side. Frontend hits `/api/compare` and `/api/receipt` only.
+
+---
+
+## Testing
+
+**Decision:** `test_compare.py` and `test_matching.py` with mocked APIs; `test_cache.py`, `test_rate_limit.py`, `test_groq_reranker.py`, `test_receipt_parse.py`. **44** pytest tests total; GitHub Actions runs them on push.
+
+---
+
+## How to extend this file
+
+1. Add a subsection under the closest heading (or create one).
+2. **Decision**, **Why**, and any bug/fix note.
+3. Link to code where it helps.
+
+Do not use em dashes in this file (project convention).
