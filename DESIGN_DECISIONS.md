@@ -22,8 +22,6 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 **Why:** The app is a single-user comparison flow (list, loading, results) with no SEO requirement. Vite was already scaffolded with Tailwind, a dev proxy, and `api.js`. Next.js would add routing and deployment complexity without clear benefit for this assessment scope.
 
-**Reference:** [PROJECT_STATE.md](PROJECT_STATE.md) section 2.
-
 ---
 
 ### FastAPI backend with a REST boundary
