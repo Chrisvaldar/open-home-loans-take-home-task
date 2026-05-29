@@ -24,7 +24,9 @@ Shared steps for both: `detect_search_type()` (brand vs generic), staple expansi
 **Decision:** `detect_search_type()` in `matching.py` checks the query against a hardcoded list of **17 brands** (`BRAND_LIST`: a2, Devondale, Bega, etc.). Match is **whole-word** (`\b` regex), so `"bread"` stays generic and `"a2 milk"` is branded.
 
 - **Branded:** only API results whose **name or brand field** contain that brand word are considered. Then the best match is chosen from that filtered list (see string scoring below). If nothing passes the brand filter, that store returns no match.
-- **Generic:** e.g. `"milk"`, `"bread"`. Different brands per store are allowed; the response can note when brands differ. Matcher prefers **homebrand** and **cheapest pack price** among good string matches.
+- **Generic:** e.g. `"milk"`, `"bread"`, `"kirks lemonade"`, or anything not in `BRAND_LIST`. Different brands per store are allowed; the response can note when brands differ. Matcher prefers **homebrand** and **cheapest pack price** among good string matches.
+
+**Note:** This does **not** mean only brands in `BRAND_LIST` can be compared. Most items use the **generic** path. The list only switches on **stricter** rules when we recognise a major brand in the query (so we do not substitute homebrand for a2, Devondale, etc.). Other brand names still work; they are just not locked to that brand name the same way.
 
 **Why:** Branded list items must not swap to homebrand milk. Generic list items are about cheap weekly staples, not forcing the same national brand at both chains.
 
