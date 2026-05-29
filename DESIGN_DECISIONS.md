@@ -2,15 +2,13 @@
 
 A running log of product and engineering choices for **Frugl**. Add new entries here whenever a meaningful decision is made or revisited.
 
----
+## How to use this file
 
-## Product identity
+When making a choice that affects behaviour, UX, or architecture:
 
-### App renamed to Frugl
-
-**Decision:** Product name is **Frugl** (was "Smart Shopping Destination" in scaffold).
-
-**Why:** Shorter consumer-facing brand for the price-comparison app. Updated in `frontend/index.html` title, `App.jsx` header and shield icon alt text, and `backend/main.py` FastAPI title.
+1. Add a dated subsection under the relevant heading (or create a new heading).
+2. State **Decision**, **Why**, and any **Problem / fix / follow-up**.
+3. Link to code or docs where helpful.
 
 ---
 
@@ -20,7 +18,7 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 **Decision:** Keep the existing Vite + React SPA rather than migrating to Next.js.
 
-**Why:** The app is a single-user comparison flow (list, loading, results) with no SEO requirement. Vite was already scaffolded with Tailwind, a dev proxy, and `api.js`. Next.js would add routing and deployment complexity without clear benefit for this assessment scope.
+**Why:** The app is a single-user comparison flow (list, loading, results) with no SEO requirement. Vite was already scaffolded with Tailwind, a dev proxy, and `api.js`. Next.js would add routing and deployment complexity without clear benefit for this assessment scope. React is also the frontend framework I'm comfortable with.
 
 ---
 
@@ -28,7 +26,7 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 **Decision:** All Woolworths, Coles, and Gemini calls run server-side. The frontend only talks to `/api/compare` and `/api/receipt`.
 
-**Why:** Protects API keys (`RAPIDAPI_KEY`, `GEMINI_API_KEY`), keeps matching and comparison logic testable in Python, and separates UI from data orchestration.
+**Why:** Protects API keys (`RAPIDAPI_KEY`, `GEMINI_API_KEY`), keeps matching and comparison logic testable in Python, and separates UI from data orchestration. FastAPI is my main backend stack.
 
 ---
 
@@ -36,7 +34,7 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 **Decision:** Use `useState` for `view` (`list` | `loading` | `results` | `error`) rather than URL-based routing.
 
-**Why:** Four screens with linear flow. Router adds boilerplate without user benefit for a demo SPA.
+**Why:** Four screens with linear flow. Router adds boilerplate without user benefit for a demo. Easily changeable for production requirements.
 
 ---
 
@@ -108,16 +106,6 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 
 ---
 
-### Product URLs in compare response
-
-**Decision:** Normalised store search results and API `StoreProduct` objects include a `url` field from RapidAPI (`item.get("url") or ""`). Empty string when missing; frontend shows a link only when truthy.
-
-**Why:** Shoppers can open the matched product on the store site. URLs were returned by the API but previously dropped in normalisation.
-
-**Reference:** [`backend/services/woolworths.py`](backend/services/woolworths.py), [`backend/services/coles.py`](backend/services/coles.py), [`backend/services/compare.py`](backend/services/compare.py), [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx).
-
----
-
 ### Special badge: API detection plus cross-store inference
 
 **Decision:** Surface a yellow **Special** badge in results when `on_special` is true. Detection uses two layers:
@@ -146,26 +134,6 @@ A running log of product and engineering choices for **Frugl**. Add new entries 
 **Produce-specific rules (2026-05-27):** `is_produce_query()` detects produce keywords (onion, cabbage, beef, etc.). When true, the Groq prompt adds stricter rules: reject processed/packaged candidates (gravy, mix, tin, sauce, wine, soup, pet, dog); require same variety (green cabbage not wombok/savoy/red; brown onion not spring onion/shallot); return `-1` if no clear fresh match.
 
 **Reference:** [`backend/services/groq_reranker.py`](backend/services/groq_reranker.py), [`backend/tests/test_groq_reranker.py`](backend/tests/test_groq_reranker.py), [`backend/services/receipt.py`](backend/services/receipt.py) (Gemini search-friendly extraction).
-
----
-
-### Receipt JSON parsing (markdown fences)
-
-**Decision:** Parse Gemini output with `_parse_items_json()`, which strips optional markdown code fences before `json.loads`. Log raw response and parsed item count to stdout.
-
-**Why:** Gemini often wraps the array in ` ```json ` despite the prompt. Bare `json.loads()` failed silently and returned `[]`, showing "No items found on receipt" even when extraction worked.
-
-**Reference:** [`backend/services/receipt.py`](backend/services/receipt.py), [`backend/tests/test_receipt_parse.py`](backend/tests/test_receipt_parse.py).
-
----
-
-### Per-row winner savings in Results
-
-**Decision:** In the breakdown table (and mobile cards), show `Saves $X.XX` at the start of the NOTE column (via `MatchNote`), before the match note and confidence. Hidden when `saving` is 0. Winner column shows store logo only (no duplicate store name text).
-
-**Why:** Makes per-item value visible without cluttering the winner cell. Logo alone is enough to identify the store.
-
-**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) `WinnerCell`, [`frontend/src/components/MatchNote.jsx`](frontend/src/components/MatchNote.jsx).
 
 ---
 
@@ -259,64 +227,11 @@ Branded query logic was not changed.
 
 ---
 
-### Annualised savings = weekly savings × 52
-
-**Decision:** `annualised_savings = savings * 52`.
-
-**Why:** Product brief emphasises the yearly household impact to make switching feel worthwhile.
-
----
-
 ### Per-item tie threshold
 
 **Decision:** Item-level tie if prices within 1 cent or 2% relative.
 
 **Why:** Avoid calling a winner on noise from floating point or trivial differences.
-
----
-
-## Frontend
-
-### Design system from Open Home Loans references
-
-**Decision:** Style the UI from `frontend/frontend_design_references/` PNGs (colours, typography, spacing, components), not ad hoc Tailwind defaults.
-
-**Why:** Assessment is for Open Home Loans; visual consistency with their design language signals craft. Dark theme, accent `#F2A233`, surface tokens defined in Tailwind v4 `@theme`.
-
----
-
-### Typography: Neue Haas Grotesk Display Pro + DM Mono
-
-**Decision:**
-
-- **Headings and body:** `'Neue Haas Grotesk Display Pro'` via cdnfonts (with system fallbacks).
-- **Prices, unit prices, and numeric values:** `'DM Mono'` via Google Fonts (`.font-numeric` class).
-
-**Why:** Matches the style guide. Monospace on currency improves scanability in the results table.
-
----
-
-### Store logos in results UI
-
-**Decision:** Show Woolworths and Coles logos in the winner column and hero via [`StoreBadge.jsx`](frontend/src/components/StoreBadge.jsx), loading official SVG assets from [`frontend/src/assets/brands/`](frontend/src/assets/brands/) (`woolworths.svg`, `coles.svg`).
-
-**Why:** Clearer than letter badges. Woolworths uses the green apple icon; Coles uses the red wordmark.
-
----
-
-### Vite proxy targets `127.0.0.1:8000` not `localhost:8000`
-
-**Decision:** Changed proxy target from `http://localhost:8000` to `http://127.0.0.1:8000`.
-
-**Why:** On Windows, `localhost` can resolve to IPv6 (`[::1]`) and hit a different process on port 8000, returning **501 Unsupported method ('POST')**. FastAPI listens on `127.0.0.1`. CORS updated to allow both `localhost:5173` and `127.0.0.1:5173`.
-
----
-
-### JSDoc types instead of TypeScript
-
-**Decision:** Keep `.jsx` files; mirror API shapes in `frontend/src/lib/types.js` with `@typedef`.
-
-**Why:** Scaffold was JavaScript. JSDoc gives type hints without a migration cost for a small frontend.
 
 ---
 
@@ -348,16 +263,6 @@ Branded query logic was not changed.
 
 ---
 
-### View on store product links
-
-**Decision:** In the breakdown table/cards, matched products with a non-empty `url` show **View on Woolworths** or **View on Coles** (label from column context). Links use `target="_blank"` and `rel="noopener noreferrer"`, styled `text-xs text-accent hover:underline`.
-
-**Why:** Click-through to the store product page; no link when URL missing or cell is "Not found".
-
-**Reference:** [`frontend/src/components/Results.jsx`](frontend/src/components/Results.jsx) (`StoreProductCell`).
-
----
-
 ## Testing
 
 ### Backend unit tests with mocked APIs
@@ -367,13 +272,3 @@ Branded query logic was not changed.
 **Why:** Compare tests must not hit live RapidAPI. Cache and rate-limit tests run fast without network and lock in production-hardening behaviour.
 
 ---
-
-## How to use this file
-
-When making a choice that affects behaviour, UX, or architecture:
-
-1. Add a dated subsection under the relevant heading (or create a new heading).
-2. State **Decision**, **Why**, and any **Problem / fix / follow-up**.
-3. Link to code or docs where helpful.
-
-Do not use em dashes in this file (project convention).
