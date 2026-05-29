@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from services.groq_reranker import rerank_with_groq
 from services.woolworths import search_item as search_woolworths
 from services.coles import search_item as search_coles
@@ -11,6 +13,9 @@ from services.matching import (
     normalise_unit_price,
     store_staple_search_term,
 )
+
+RECEIPT_CANDIDATE_LIMIT = 10
+MAX_CONCURRENT_ITEMS = 5
 
 
 def _infer_cross_store_special(
@@ -58,6 +63,7 @@ def _build_store_result(match: dict | None) -> dict | None:
         "size": size,
         "unit_price": normalised[0] if normalised else None,
         "unit": normalised[1] if normalised else None,
+        "url": match.get("url") or "",
         "on_special": match.get("on_special") or False,
         "confidence": _confidence(match),
     }
@@ -150,7 +156,93 @@ def _build_note(
     return None
 
 
-RECEIPT_CANDIDATE_LIMIT = 10
+def _search_both_stores(
+    woolworths_query: str,
+    coles_query: str,
+    page_size: int = 3,
+) -> tuple[list[dict], list[dict]]:
+    """Run Woolworths and Coles searches concurrently for one item."""
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        woolworths_future = executor.submit(search_woolworths, woolworths_query, page_size)
+        coles_future = executor.submit(search_coles, coles_query, page_size)
+        return woolworths_future.result(), coles_future.result()
+
+
+def _fetch_raw_results(
+    item: str, source: str, search_type: str
+) -> tuple[str, list[dict], list[dict]]:
+    """Fetch store search results for a single list item."""
+    if source == "receipt":
+        search_term = normalize_receipt_search_query(item)
+        print(
+            f"[compare_basket] receipt item={item!r} "
+            f"normalized_search={search_term!r}"
+        )
+        w_raw, c_raw = _search_both_stores(
+            search_term, search_term, page_size=RECEIPT_CANDIDATE_LIMIT
+        )
+        return search_term, w_raw, c_raw
+
+    if search_type == "generic" and is_staple_query(item):
+        search_term = expand_staple_query(item)
+        w_raw, c_raw = _search_both_stores(
+            store_staple_search_term(search_term, "woolworths"),
+            store_staple_search_term(search_term, "coles"),
+        )
+        return search_term, w_raw, c_raw
+
+    search_term = expand_staple_query(item)
+    w_raw, c_raw = _search_both_stores(search_term, search_term)
+    return search_term, w_raw, c_raw
+
+
+def _process_single_item(item: str, source: str) -> dict:
+    """Compare one list item across Woolworths and Coles."""
+    search_type = detect_search_type(item)
+    search_term, w_raw, c_raw = _fetch_raw_results(item, source, search_type)
+
+    if source == "receipt":
+        print(
+            f"[compare_basket] receipt rerank for item={item!r} "
+            f"w_candidates={len(w_raw)} c_candidates={len(c_raw)}"
+        )
+        w_match = rerank_with_groq(item, w_raw) if w_raw else None
+        c_match = rerank_with_groq(item, c_raw) if c_raw else None
+        w_name = w_match.get("name") if w_match else None
+        c_name = c_match.get("name") if c_match else None
+        print(f"[compare_basket] receipt picks w={w_name!r} c={c_name!r}")
+    else:
+        w_match = pick_best_match(item, w_raw, search_type, search_term=search_term)
+        c_match = pick_best_match(item, c_raw, search_type, search_term=search_term)
+
+    if w_match is None and c_match is None:
+        return {
+            "item": item,
+            "match_type": "no_match",
+            "woolworths": None,
+            "coles": None,
+            "winner": "no_comparison",
+            "saving": 0.0,
+            "note": "No match found at either store",
+        }
+
+    w_result = _build_store_result(w_match)
+    c_result = _build_store_result(c_match)
+    _infer_cross_store_special(w_result, c_result)
+
+    match_type = "branded" if search_type == "branded" else "generic"
+    winner, saving = _item_winner(w_result, c_result)
+    note = _build_note(search_type, w_result, c_result, winner)
+
+    return {
+        "item": item,
+        "match_type": match_type,
+        "woolworths": w_result,
+        "coles": c_result,
+        "winner": winner,
+        "saving": saving,
+        "note": note,
+    }
 
 
 def compare_basket(items: list[str], source: str = "manual") -> dict:
@@ -167,94 +259,18 @@ def compare_basket(items: list[str], source: str = "manual") -> dict:
             "breakdown": [],
         }
 
-    breakdown = []
+    max_workers = min(MAX_CONCURRENT_ITEMS, len(items))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        breakdown = list(executor.map(lambda item: _process_single_item(item, source), items))
+
     total_woolworths = 0.0
     total_coles = 0.0
+    for row in breakdown:
+        if row["woolworths"] and row["winner"] != "no_comparison":
+            total_woolworths += row["woolworths"]["price"]
+        if row["coles"] and row["winner"] != "no_comparison":
+            total_coles += row["coles"]["price"]
 
-    for item in items:
-        search_type = detect_search_type(item)
-
-        if source == "receipt":
-            search_term = normalize_receipt_search_query(item)
-            print(
-                f"[compare_basket] receipt item={item!r} "
-                f"normalized_search={search_term!r}"
-            )
-            w_raw = search_woolworths(search_term, page_size=RECEIPT_CANDIDATE_LIMIT)
-            c_raw = search_coles(search_term, page_size=RECEIPT_CANDIDATE_LIMIT)
-        elif search_type == "generic" and is_staple_query(item):
-            search_term = expand_staple_query(item)
-            w_raw = search_woolworths(
-                store_staple_search_term(search_term, "woolworths")
-            )
-            c_raw = search_coles(store_staple_search_term(search_term, "coles"))
-        else:
-            search_term = expand_staple_query(item)
-            w_raw = search_woolworths(search_term)
-            c_raw = search_coles(search_term)
-
-        # Pick best match from each store's results
-        if source == "receipt":
-            print(
-                f"[compare_basket] receipt rerank for item={item!r} "
-                f"w_candidates={len(w_raw)} c_candidates={len(c_raw)}"
-            )
-            w_match = rerank_with_groq(item, w_raw) if w_raw else None
-            c_match = rerank_with_groq(item, c_raw) if c_raw else None
-            w_name = w_match.get("name") if w_match else None
-            c_name = c_match.get("name") if c_match else None
-            print(f"[compare_basket] receipt picks w={w_name!r} c={c_name!r}")
-        else:
-            w_match = pick_best_match(item, w_raw, search_type, search_term=search_term)
-            c_match = pick_best_match(item, c_raw, search_type, search_term=search_term)
-
-        # No match at either store
-        if w_match is None and c_match is None:
-            breakdown.append({
-                "item": item,
-                "match_type": "no_match",
-                "woolworths": None,
-                "coles": None,
-                "winner": "no_comparison",
-                "saving": 0.0,
-                "note": "No match found at either store",
-            })
-            continue
-
-        # Build standardised result shapes
-        w_result = _build_store_result(w_match)
-        c_result = _build_store_result(c_match)
-        _infer_cross_store_special(w_result, c_result)
-
-        # Determine match type
-        if search_type == "branded":
-            match_type = "branded"
-        else:
-            match_type = "generic"
-
-        # Determine winner and saving for this item
-        winner, saving = _item_winner(w_result, c_result)
-
-        # Build note
-        note = _build_note(search_type, w_result, c_result, winner)
-
-        # Accumulate totals — only count items where both stores have a result
-        if w_result and winner != "no_comparison":
-            total_woolworths += w_result["price"]
-        if c_result and winner != "no_comparison":
-            total_coles += c_result["price"]
-
-        breakdown.append({
-            "item": item,
-            "match_type": match_type,
-            "woolworths": w_result,
-            "coles": c_result,
-            "winner": winner,
-            "saving": saving,
-            "note": note,
-        })
-
-    # Overall winner based on totals
     diff = total_woolworths - total_coles
     if abs(diff) <= 0.50:
         overall_winner = "tie"

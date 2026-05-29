@@ -23,6 +23,7 @@
  * @property {number | null} unit_price
  * @property {string | null} unit
  * @property {boolean} on_special
+ * @property {string} [url]
  * @property {Confidence} confidence
  */
 

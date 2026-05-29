@@ -2,10 +2,17 @@ import json
 import os
 
 import requests
+
+from services.cache import get_cached_search, set_cached_search
+
 COLES_SEARCH_URL = (
     "https://coles-product-price-api.p.rapidapi.com/coles/product-search/"
 )
 RAPIDAPI_HOST = "coles-product-price-api.p.rapidapi.com"
+
+
+def _debug_api_responses() -> bool:
+    return os.getenv("DEBUG_API_RESPONSES", "").lower() in ("true", "1", "yes")
 
 
 def _on_special(item: dict, current_price: float) -> bool:
@@ -22,6 +29,11 @@ def _on_special(item: dict, current_price: float) -> bool:
 
 def search_item(query: str, page_size: int = 3) -> list[dict]:
     """Search Coles catalog; return up to page_size normalized product dicts."""
+    cached = get_cached_search("coles", query, page_size)
+    if cached is not None:
+        print(f"[Coles API] cache hit query={query!r}")
+        return cached
+
     api_key = os.getenv("RAPIDAPI_KEY")
     if not api_key:
         return []
@@ -39,7 +51,8 @@ def search_item(query: str, page_size: int = 3) -> list[dict]:
         response.raise_for_status()
         data = response.json()
         print(f"[Coles API] query={query!r}")
-        print(json.dumps(data, indent=2))
+        if _debug_api_responses():
+            print(json.dumps(data, indent=2))
     except (requests.RequestException, ValueError):
         return []
 
@@ -52,7 +65,10 @@ def search_item(query: str, page_size: int = 3) -> list[dict]:
                 "brand": item.get("product_brand", ""),
                 "price": current_price,
                 "size": item.get("product_size", ""),
+                "url": item.get("url") or "",
                 "on_special": _on_special(item, current_price),
             }
         )
+
+    set_cached_search("coles", query, page_size, results)
     return results

@@ -199,6 +199,38 @@ def test_receipt_source_uses_groq_reranker(
 
 @patch("services.compare.search_woolworths")
 @patch("services.compare.search_coles")
+def test_store_result_includes_url(mock_coles, mock_woolworths):
+    woolies_url = "https://www.woolworths.com.au/shop/productdetails/123"
+    coles_url = "https://www.coles.com.au/product/456"
+    mock_woolworths.side_effect = make_search_side_effect(
+        {**MOCK_WOOLWORTHS_CHEAP_MILK, "url": woolies_url}
+    )
+    mock_coles.side_effect = make_search_side_effect(
+        {**MOCK_COLES_EXPENSIVE_MILK, "url": coles_url}
+    )
+
+    result = compare_basket(["milk"])
+    item = result["breakdown"][0]
+
+    assert item["woolworths"]["url"] == woolies_url
+    assert item["coles"]["url"] == coles_url
+
+
+@patch("services.compare.search_woolworths")
+@patch("services.compare.search_coles")
+def test_store_result_url_defaults_to_empty_string(mock_coles, mock_woolworths):
+    mock_woolworths.side_effect = make_search_side_effect(MOCK_WOOLWORTHS_CHEAP_MILK)
+    mock_coles.side_effect = make_search_side_effect(MOCK_COLES_EXPENSIVE_MILK)
+
+    result = compare_basket(["milk"])
+    item = result["breakdown"][0]
+
+    assert item["woolworths"]["url"] == ""
+    assert item["coles"]["url"] == ""
+
+
+@patch("services.compare.search_woolworths")
+@patch("services.compare.search_coles")
 def test_compare_basket_skips_reusable_bags(mock_coles, mock_woolworths):
     mock_woolworths.side_effect = make_search_side_effect(MOCK_WOOLWORTHS_CHEAP_MILK)
     mock_coles.side_effect = make_search_side_effect(MOCK_COLES_EXPENSIVE_MILK)
