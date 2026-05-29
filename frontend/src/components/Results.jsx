@@ -40,9 +40,9 @@ function heroHeadline(winner) {
 }
 
 /**
- * @param {{ product: StoreProduct | null }} props
+ * @param {{ product: StoreProduct | null, storeLabel: string }} props
  */
-function StoreProductCell({ product }) {
+function StoreProductCell({ product, storeLabel }) {
   if (!product) {
     return <span className="text-sm text-text-secondary">Not found</span>;
   }
@@ -70,6 +70,16 @@ function StoreProductCell({ product }) {
       {unitPrice && (
         <p className="font-numeric text-xs text-text-secondary">{unitPrice}</p>
       )}
+      {product.url ? (
+        <a
+          href={product.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block text-xs text-accent hover:underline"
+        >
+          View on {storeLabel}
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -97,6 +107,59 @@ function rowConfidence(row) {
 }
 
 /**
+ * @param {BreakdownItem[]} breakdown
+ * @returns {{ woolworths: number, coles: number }}
+ */
+function countSpecials(breakdown) {
+  let woolworths = 0;
+  let coles = 0;
+
+  for (const row of breakdown) {
+    if (row.woolworths?.on_special === true) {
+      woolworths += 1;
+    }
+    if (row.coles?.on_special === true) {
+      coles += 1;
+    }
+  }
+
+  return { woolworths, coles };
+}
+
+/**
+ * @param {number} count
+ * @param {string} storeName
+ * @returns {string | null}
+ */
+function specialsStorePhrase(count, storeName) {
+  if (count === 0) {
+    return null;
+  }
+
+  const itemWord = count === 1 ? 'item' : 'items';
+  return `${count} ${itemWord} on special at ${storeName}`;
+}
+
+/**
+ * @param {BreakdownItem[]} breakdown
+ * @returns {string | null}
+ */
+function formatSpecialsSummary(breakdown) {
+  const { woolworths, coles } = countSpecials(breakdown);
+
+  if (woolworths === 0 && coles === 0) {
+    return null;
+  }
+
+  const parts = [
+    specialsStorePhrase(woolworths, 'Woolworths'),
+    specialsStorePhrase(coles, 'Coles'),
+  ].filter(Boolean);
+
+  return parts.join(' · ');
+}
+
+/**
  * @param {{ row: BreakdownItem }} props
  */
 function BreakdownCard({ row }) {
@@ -121,13 +184,13 @@ function BreakdownCard({ row }) {
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
             Woolworths
           </p>
-          <StoreProductCell product={row.woolworths} />
+          <StoreProductCell product={row.woolworths} storeLabel="Woolworths" />
         </div>
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
             Coles
           </p>
-          <StoreProductCell product={row.coles} />
+          <StoreProductCell product={row.coles} storeLabel="Coles" />
         </div>
       </div>
 
@@ -147,6 +210,8 @@ function BreakdownCard({ row }) {
  * }} props
  */
 export default function Results({ results, onCompareAgain }) {
+  const specialsSummary = formatSpecialsSummary(results.breakdown);
+
   return (
     <div className="space-y-8">
       <section
@@ -179,6 +244,11 @@ export default function Results({ results, onCompareAgain }) {
                 </span>{' '}
                 if you keep switching
               </p>
+              {specialsSummary ? (
+                <p className="mt-2 text-sm text-text-secondary">
+                  {specialsSummary}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -233,10 +303,13 @@ export default function Results({ results, onCompareAgain }) {
                     {row.item}
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <StoreProductCell product={row.woolworths} />
+                    <StoreProductCell
+                      product={row.woolworths}
+                      storeLabel="Woolworths"
+                    />
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <StoreProductCell product={row.coles} />
+                    <StoreProductCell product={row.coles} storeLabel="Coles" />
                   </td>
                   <td className="px-4 py-4 align-top">
                     <WinnerCell row={row} />
