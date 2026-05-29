@@ -86,14 +86,21 @@ function StoreProductCell({ product, storeLabel }) {
 
 /**
  * @param {BreakdownItem} row
+ * @param {'sm' | 'md' | 'lg'} [badgeSize]
  */
-function WinnerCell({ row }) {
+function WinnerCell({ row, badgeSize = 'sm' }) {
   if (row.winner === 'woolworths' || row.winner === 'coles') {
-    return <StoreBadge winner={row.winner} size="sm" />;
+    return <StoreBadge winner={row.winner} size={badgeSize} />;
   }
 
   return (
-    <span className="text-sm text-text-secondary">
+    <span
+      className={
+        badgeSize === 'lg'
+          ? 'text-base font-medium text-text-secondary'
+          : 'text-sm text-text-secondary'
+      }
+    >
       {formatWinnerLabel(row.winner)}
     </span>
   );
@@ -174,19 +181,19 @@ function BreakdownCard({ row }) {
             {row.item}
           </h3>
         </div>
-        <div>
-          <WinnerCell row={row} />
+        <div className="shrink-0">
+          <WinnerCell row={row} badgeSize="lg" />
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
+      <div className="sm:grid sm:grid-cols-2 sm:gap-4">
+        <div className="border-b border-border-default pb-4 sm:border-b-0 sm:pb-0">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
             Woolworths
           </p>
           <StoreProductCell product={row.woolworths} storeLabel="Woolworths" />
         </div>
-        <div>
+        <div className="pt-4 sm:pt-0">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
             Coles
           </p>
