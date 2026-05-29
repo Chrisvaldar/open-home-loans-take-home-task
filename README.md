@@ -1,40 +1,49 @@
 # Frugl
 
-A grocery price comparison web app that helps Australian households decide whether to shop at **Coles** or **Woolworths** this week. Enter your regular shopping list, compare current prices and specials, and see how much you could save.
+Grocery price comparison for Coles vs Woolworths. Type a weekly list (or scan a receipt), compare prices, and see which store is cheaper overall plus a per-item breakdown.
 
 **Live app:** [https://open-home-loans-take-home-task.vercel.app/](https://open-home-loans-take-home-task.vercel.app/)
 
-Built as part of the Open Home Loans take-home assessment (Brief 3A).
+Open Home Loans take-home assessment (Brief 3A).
+
+## What it does
+
+- **Build a list** manually and hit Compare
+- **Scan a receipt** (Gemini OCR) → items go into the list so you can edit them → then Compare yourself
+- **Results screen** with overall winner, savings, annualised savings, specials count, and per-item Woolworths vs Coles prices
+- **Product links** when the API returns a URL ("View on Woolworths" / "View on Coles")
+- Receipt compares use a **Groq reranker** so messy OCR lines match the right products more reliably than string matching alone
+
+More detail on matching, specials detection, caching, etc. is in [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).
 
 ## Stack
 
-- **Frontend:** React (Vite) + Tailwind CSS
-- **Backend:** FastAPI (Python)
-- **Data:** Woolworths & Coles product search via [RapidAPI](https://rapidapi.com/) (data-holdings-group)
+- **Frontend:** React + Vite + Tailwind (hosted on Vercel)
+- **Backend:** FastAPI (Python), deployed separately (e.g. Render / Railway)
+- **Prices:** Woolworths + Coles search via [RapidAPI](https://rapidapi.com/) (data-holdings-group)
+- **Receipt OCR:** Google Gemini
+- **Receipt product matching:** Groq (`llama-3.1-8b-instant`)
 
-## Project structure
+## Repo layout
 
 ```
 backend/
-  main.py                 # FastAPI app + CORS
-  routers/compare.py      # POST /api/compare
-  routers/receipt.py      # POST /api/receipt
-  tests/fixtures/         # local test receipt images (gitignored)
-  scripts/                # receipt test helpers
-  services/               # API clients, matching, comparison logic
-  tests/                  # pytest unit tests
+  main.py              # FastAPI, CORS, rate limit, /health
+  routers/             # /api/compare, /api/receipt
+  services/            # store APIs, matching, compare, cache, rate limit
+  tests/               # pytest
 frontend/
-  src/components/         # UI placeholders
-  src/lib/api.js          # API client helpers
+  src/components/      # ListBuilder, Results, ReceiptUpload, etc.
+  src/lib/api.js       # fetch helpers
 ```
 
-## Getting started
+## Run locally
 
-### Prerequisites
+### You need
 
 - Python 3.11+
-- Node.js 18+
-- API keys (see [Environment variables](#environment-variables))
+- Node 18+
+- API keys (see below)
 
 ### Backend
 
@@ -50,14 +59,17 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env and add your keys
+# fill in your keys in .env
 
 uvicorn main:app --reload
 ```
 
-API runs at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+Runs at `http://127.0.0.1:8000` (use this host on Windows; `localhost` can be weird with the Vite proxy).
 
-**Receipt testing:** put a sample image at `backend/tests/fixtures/test_receipt.jpg` (gitignored), then run `python scripts/test_receipt.py` from `backend/`. See [backend/docs/receipt_testing.md](backend/docs/receipt_testing.md) — Swagger often fails on large base64 payloads.
+- API docs: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+
+**Receipt testing without the UI:** drop an image at `backend/tests/fixtures/test_receipt.jpg` and run `python scripts/test_receipt.py` from `backend/`. See [backend/docs/receipt_testing.md](backend/docs/receipt_testing.md). Swagger struggles with big base64 payloads so I usually test receipts that way.
 
 ### Frontend
 
@@ -67,36 +79,55 @@ npm install
 npm run dev
 ```
 
-App runs at `http://localhost:5173`. Vite proxies `/api` requests to the backend.
+App at `http://localhost:5173`. By default Vite proxies `/api` to `http://127.0.0.1:8000`.
 
-### Run tests
+To point at a deployed backend instead:
+
+```bash
+# frontend/.env.local (not committed)
+VITE_API_URL=https://your-backend-url-here
+```
+
+### Tests
 
 ```bash
 cd backend
 pytest
 ```
 
-Seven compare-basket tests are marked `skip` until comparison logic is implemented. Matching tests and the empty-basket test run now.
+Right now that's **44 tests** (compare, matching, receipt parsing, cache, rate limit). They mock external APIs so you don't burn RapidAPI credits in CI.
+
+GitHub Actions runs the same on push/PR (see `.github/workflows/backend-tests.yml`).
 
 ## Environment variables
 
-Create `backend/.env` from `backend/.env.example`:
+Copy `backend/.env.example` to `backend/.env`. **Do not commit `.env`.**
 
-| Variable | Description |
-|----------|-------------|
-| `RAPIDAPI_KEY` | RapidAPI key for Woolworths & Coles product search |
-| `GEMINI_API_KEY` | Google Gemini API key for receipt image extraction |
+| Variable | What it's for |
+|----------|----------------|
+| `RAPIDAPI_KEY` | Woolworths + Coles product search |
+| `GEMINI_API_KEY` | Receipt image → item list |
+| `GROQ_API_KEY` | Rerank store search results for receipt items |
+| `SEARCH_CACHE_TTL_SECONDS` | Optional. Cache search results (default 900 = 15 min) |
+| `RATE_LIMIT_PER_MINUTE` | Optional. Max `/api/*` requests per IP per minute (default 30) |
+| `DEBUG_API_RESPONSES` | Optional. Set `true` to dump full RapidAPI JSON in logs |
 
-Never commit `.env` — it is listed in `.gitignore`.
+On Vercel you only need **`VITE_API_URL`** set to your backend base URL (no trailing slash).
 
-## What's next
+## Deployment (what I did)
 
-- [ ] Live Coles API integration
-- [ ] Expanded brand list
-- [ ] Loyalty card points integration (Everyday Rewards, Flybuys)
-- [ ] Push notifications for weekly specials
-- [ ] Store location filtering
+- **Frontend:** Vercel, connected to this repo. Env: `VITE_API_URL` = backend URL.
+- **Backend:** separate host with the env vars above. CORS in `main.py` allows the Vercel production URL and preview URLs.
+- After changing backend env vars, **redeploy/restart** the backend or they won't apply.
+- Optional: set your host's health check path to `/health`.
+
+## If I had more time
+
+- Broader brand list and better handling of edge-case product names
+- Loyalty points (Everyday Rewards / Flybuys) in the savings story
+- Proper rate limiting behind a reverse proxy (real client IP)
+- Frontend CI (lint/build) alongside backend tests
 
 ## License
 
-Take-home assessment submission — not for production use without review.
+Take-home assessment. Not meant as production-ready software without a proper review.
