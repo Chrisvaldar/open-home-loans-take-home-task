@@ -123,7 +123,8 @@ On Vercel you only need **`VITE_API_URL`** set to your backend base URL (no trai
 
 ## If I had more time
 
-- Broader brand list and better handling of edge-case product names
+- Broader brand list and better handling of edge-case product names (embeddings, more testing, etc.)
+- Better API with more details (on special, out of stock, etc.)
 - Loyalty points (Everyday Rewards / Flybuys) in the savings story
 - Proper rate limiting behind a reverse proxy (real client IP)
 - Frontend CI (lint/build) alongside backend tests
